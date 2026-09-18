@@ -418,12 +418,17 @@ struct npc_shade_of_the_horsemanAI : public ScriptedAI
     bool m_landing;
     bool m_startedFires;
     bool m_performedDoubleLaugh;
+    uint32 m_spawnYellTimer;
     InstanceData* m_instance;
 
     void JustRespawned() override
     {
         m_instance->SetData(TYPE_SHADE_OF_THE_HORSEMAN_ATTACK_PHASE + ShadeOfTheHorsemanData::GetTypeFromZoneId(m_creature->GetZoneId()), SHADE_PHASE_SPAWNED);
-        DoScriptText(SAY_SHADE_SPAWN, m_creature);
+        m_spawnYellTimer = 2500;
+        DoCastSpellIfCan(m_creature, SPELL_CLIMAX_GHOST_VISUAL);
+        DoCastSpellIfCan(m_creature, SPELL_SHADE_DURATION);
+        DoCastSpellIfCan(m_creature, SPELL_START_FIRE_PERIODIC);
+        DoCastSpellIfCan(m_creature, SPELL_MANIACAL_LAUGH_DELAY_17);
     }
 
     void JustDied(Unit* /*killer*/) override
@@ -500,7 +505,11 @@ struct npc_shade_of_the_horsemanAI : public ScriptedAI
             m_creature->SetLevitate(false);
             m_creature->Unmount();
             m_creature->GetMotionMaster()->Clear();
-            m_creature->GetMotionMaster()->MoveRandomAroundPoint(m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 5.f);
+            float z = m_creature->GetPositionZ();
+            m_creature->UpdateGroundPositionZ(m_creature->GetPositionX(), m_creature->GetPositionY(), z);
+            m_creature->Relocate(m_creature->GetPositionX(), m_creature->GetPositionY(), z);
+
+            m_creature->GetMotionMaster()->MoveRandomAroundPoint(m_creature->GetPositionX(), m_creature->GetPositionY(), z, 5.f);
             m_creature->SetImmuneToNPC(false);
             m_creature->SetImmuneToPlayer(false);
             m_creature->AI()->SetReactState(REACT_AGGRESSIVE);
@@ -514,6 +523,18 @@ struct npc_shade_of_the_horsemanAI : public ScriptedAI
 
     void UpdateAI(const uint32 diff) override
     {
+        if (m_spawnYellTimer)
+        {
+            if (m_spawnYellTimer <= diff)
+            {
+                DoScriptText(SAY_SHADE_SPAWN, m_creature);
+                m_creature->PlayDirectSound(11966, PlayPacketParameters(PlayPacketSettings::ZONE, m_creature->GetZoneId()));
+                m_spawnYellTimer = 0;
+            }
+            else
+                m_spawnYellTimer -= diff;
+        }
+
         if (!m_landing)
         {
             // todo: investigate scaling features - number of fires started depends on how many players are in the area?
@@ -781,6 +802,7 @@ struct HorsemanCreateWaterBucket : public SpellScript
     }
 };
 
+// 43885 Headless Horseman - Horseman Laugh, Maniacal
 // 43884 Headless Horseman - Maniacal Laugh, Maniacal, Delayed 17
 // 43886 Headless Horseman - Maniacal Laugh, Maniacal, Delayed 9
 // ??? 44000 Headless Horseman - Maniacal Laugh, Maniacal, other, Delayed 17
@@ -823,11 +845,36 @@ struct HorsemanManiacalLaugh : public AuraScript
 // 42140 Headless Horseman - Start Fire, Periodic Aura
 struct HorsemanStartFirePeriodic : public AuraScript
 {
-    // triggered every 1.25 seconds to search for fire npc targets
     void OnPeriodicDummy(Aura* aura) const override
     {
         if (Unit* caster = aura->GetCaster())
+        {
             caster->CastSpell(nullptr, SPELL_START_FIRE_TARGET_TEST, TRIGGERED_NONE);
+
+            // Hack for Azure Watch: Because the DBC for 42143 (Target 60 - Cone) has limitations and doesn't
+            // reach the ground when the horseman flies ~27 yards above the fires, we will manually
+            // ignite fires that are below him horizontally.
+            std::list<Creature*> fires;
+            GetCreatureListWithEntryInGrid(fires, caster, NPC_HEADLESS_HORSEMAN_FIRE, 100.0f);
+            
+            uint32 ignitedCount = 0;
+            for (Creature* fire : fires)
+            {
+                if (!fire->HasAura(SPELL_FIRE))
+                {
+                    // Check horizontal distance
+                    if (caster->GetDistance2d(fire->GetPositionX(), fire->GetPositionY()) < 25.0f)
+                    {
+                        caster->CastSpell(fire, SPELL_START_FIRE, TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST);
+                        caster->CastSpell(fire, SPELL_START_FIRE_TRAIL, TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST);
+                        
+                        ignitedCount++;
+                        if (ignitedCount >= 2) // Max 2 per tick to avoid setting the whole town on fire instantly
+                            break;
+                    }
+                }
+            }
+        }
     }
 };
 
@@ -837,7 +884,7 @@ struct HorsemanStartFireTargetTest : public SpellScript
 {
     bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
     {
-        if (spell->m_spellInfo->Id == SPELL_START_FIRE_TARGET_TEST_GUARD && target->HasAura(SPELL_FIRE))
+        if (target->HasAura(SPELL_FIRE))
             return false;
 
         return true;

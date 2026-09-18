@@ -107,6 +107,8 @@ struct world_map_kalimdor : public ScriptedMap
                 break;
             case NPC_MASKED_ORPHAN_MATRON:
             case NPC_COSTUMED_ORPHAN_MATRON:
+                m_npcEntryGuidStore[pCreature->GetEntry()] = pCreature->GetObjectGuid();
+                break;
             case NPC_NECROPOLIS_HEALTH:
                 m_npcEntryGuidCollection[pCreature->GetEntry()].push_back(pCreature->GetObjectGuid());
                 break;

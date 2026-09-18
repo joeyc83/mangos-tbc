@@ -1613,7 +1613,7 @@ struct world_map_outland : public ScriptedMap, public TimerManager
                 break;
             case NPC_MASKED_ORPHAN_MATRON:
             case NPC_COSTUMED_ORPHAN_MATRON:
-                m_npcEntryGuidCollection[creature->GetEntry()].push_back(creature->GetObjectGuid());
+                m_npcEntryGuidStore[creature->GetEntry()] = creature->GetObjectGuid();
                 break;
         }
     }

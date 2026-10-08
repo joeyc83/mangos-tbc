@@ -743,7 +743,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
     // "GetAccountId()==db stored account id" checked in LoadFromDB (prevent login not own character using cheating tools)
     if (!pCurrChar->LoadFromDB(playerGuid, holder))
     {
-        KickPlayer();                                       // disconnect client, player no set to session and it will not deleted or saved at kick
+        KickPlayer(false);                                       // disconnect client, player no set to session and it will not deleted or saved at kick
         // also deletes player
         delete holder;                                      // delete all unprocessed queries
         m_playerLoading = false;

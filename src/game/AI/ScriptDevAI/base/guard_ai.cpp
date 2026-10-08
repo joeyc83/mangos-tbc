@@ -37,6 +37,24 @@ void guardAI::Reset()
     m_buffTimer = 0;                                      // Rebuff as soon as we can
     m_IncapacitatingShoutTimer = urand(3000, 24000);
     m_NetTimer = urand(0, 21000);
+    m_returnOrientationTimer = 0;
+}
+
+void guardAI::UpdateAI(const uint32 diff)
+{
+    if (m_returnOrientationTimer)
+    {
+        if (m_returnOrientationTimer <= diff)
+        {
+            m_returnOrientationTimer = 0;
+            if (!m_creature->IsInCombat())
+                m_creature->SetFacingTo(m_creature->GetRespawnPosition().GetPositionO());
+        }
+        else
+            m_returnOrientationTimer -= diff;
+    }
+
+    CombatAI::UpdateAI(diff);
 }
 
 void guardAI::Aggro(Unit* who)
@@ -82,8 +100,17 @@ void guardAI::JustRespawned()
     }
 }
 
-void guardAI::DoReplyToTextEmote(uint32 textEmote)
+void guardAI::DoReplyToTextEmote(Player* player, uint32 textEmote)
 {
+    if (m_creature->IsAlive() && !m_creature->IsInCombat())
+    {
+        m_creature->GetMotionMaster()->PauseWaypoints(3000);
+        m_creature->SetFacingToObject(player);
+        
+        if (m_creature->GetDefaultMovementType() == IDLE_MOTION_TYPE)
+            m_returnOrientationTimer = 3000;
+    }
+
     switch (textEmote)
     {
         case TEXTEMOTE_KISS:    m_creature->HandleEmote(EMOTE_ONESHOT_BOW);    break;
@@ -98,5 +125,5 @@ void guardAI::DoReplyToTextEmote(uint32 textEmote)
 void guardAI_orgrimmar::ReceiveEmote(Player* player, uint32 textEmote)
 {
     if (player->GetTeam() == HORDE)
-        DoReplyToTextEmote(textEmote);
+        DoReplyToTextEmote(player, textEmote);
 }

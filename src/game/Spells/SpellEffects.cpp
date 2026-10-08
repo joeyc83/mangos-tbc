@@ -517,30 +517,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                 }
                 break;
             }
-            case SPELLFAMILY_PALADIN:
-            {
-                // Judgement of Vengeance
-                if ((m_spellInfo->SpellFamilyFlags & uint64(0x800000000)) && m_spellInfo->SpellIconID == 2292)
-                {
-                    // Get stack of Holy Vengeance on the target added by caster
-                    uint32 stacks = 0;
-                    Unit::AuraList const& auras = unitTarget->GetAurasByType(SPELL_AURA_PERIODIC_DAMAGE);
-                    for (auto aura : auras)
-                    {
-                        if ((aura->GetId() == 31803) && aura->GetCasterGuid() == m_caster->GetObjectGuid())
-                        {
-                            stacks = aura->GetStackAmount();
-                            break;
-                        }
-                    }
-                    if (!stacks)
-                        // No damage if the target isn't affected by this
-                        damage = -1;
-                    else
-                        damage *= stacks;
-                }
-                break;
-            }
+
         }
 
         if (damage >= 0)
@@ -2683,32 +2660,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
         {
             switch (m_spellInfo->SpellIconID)
             {
-                case 156:                                   // Holy Shock
-                {
-                    if (!unitTarget)
-                        return;
 
-                    int hurt;
-                    int heal;
-                    switch (m_spellInfo->Id)
-                    {
-                        case 20473: hurt = 25912; heal = 25914; break;
-                        case 20929: hurt = 25911; heal = 25913; break;
-                        case 20930: hurt = 25902; heal = 25903; break;
-                        case 27174: hurt = 27176; heal = 27175; break;
-                        case 33072: hurt = 33073; heal = 33074; break;
-                        default:
-                            sLog.outError("Spell::EffectDummy: Spell %u not handled in HS", m_spellInfo->Id);
-                            return;
-                    }
-
-                    if (m_caster->CanAssistSpell(unitTarget, m_spellInfo))
-                        m_caster->CastSpell(unitTarget, heal, TRIGGERED_OLD_TRIGGERED);
-                    else
-                        m_caster->CastSpell(unitTarget, hurt, TRIGGERED_OLD_TRIGGERED);
-
-                    return;
-                }
                 case 561:                                   // Judgement of command
                 {
                     if (unitTarget)
@@ -5604,34 +5556,53 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                 }
                 case 24717:                                 // Pirate Costume
                 {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+                    // When cast via gossip script, the player is passed as an explicit target
+                    // but TARGET_UNIT_RAID implicit targeting overwrites unitTarget.
+                    // Fall back to the explicit target from SpellCastTargets.
+                    Unit* target = (unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER) ? unitTarget : m_targets.getUnitTarget();
+                    if (!target || target->GetTypeId() != TYPEID_PLAYER)
                         return;
 
+                    // Remove existing buffs to prevent duplicate stacking if clicked multiple times
+                    target->RemoveAurasDueToSpell(24708);
+                    target->RemoveAurasDueToSpell(24709);
+
                     // Pirate Costume (male or female)
-                    m_caster->CastSpell(unitTarget, unitTarget->getGender() == GENDER_MALE ? 24708 : 24709, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastSpell(target, target->getGender() == GENDER_MALE ? 24708 : 24709, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
                 case 24718:                                 // Ninja Costume
                 {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+                    Unit* target = (unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER) ? unitTarget : m_targets.getUnitTarget();
+                    if (!target || target->GetTypeId() != TYPEID_PLAYER)
                         return;
 
+                    // Remove existing buffs to prevent duplicate stacking if clicked multiple times
+                    target->RemoveAurasDueToSpell(24710);
+                    target->RemoveAurasDueToSpell(24711);
+
                     // Ninja Costume (male or female)
-                    m_caster->CastSpell(unitTarget, unitTarget->getGender() == GENDER_MALE ? 24711 : 24710, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastSpell(target, target->getGender() == GENDER_MALE ? 24711 : 24710, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
                 case 24719:                                 // Leper Gnome Costume
                 {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+                    Unit* target = (unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER) ? unitTarget : m_targets.getUnitTarget();
+                    if (!target || target->GetTypeId() != TYPEID_PLAYER)
                         return;
 
+                    // Remove existing buffs to prevent duplicate stacking if clicked multiple times
+                    target->RemoveAurasDueToSpell(24712);
+                    target->RemoveAurasDueToSpell(24713);
+
                     // Leper Gnome Costume (male or female)
-                    m_caster->CastSpell(unitTarget, unitTarget->getGender() == GENDER_MALE ? 24712 : 24713, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastSpell(target, target->getGender() == GENDER_MALE ? 24712 : 24713, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
                 case 24720:                                 // Random Costume
                 {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+                    Unit* target = (unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER) ? unitTarget : m_targets.getUnitTarget();
+                    if (!target || target->GetTypeId() != TYPEID_PLAYER)
                         return;
 
                     uint32 spellId = 0;
@@ -5639,13 +5610,13 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     switch (urand(0, 6))
                     {
                         case 0:
-                            spellId = unitTarget->getGender() == GENDER_MALE ? 24708 : 24709;
+                            spellId = target->getGender() == GENDER_MALE ? 24708 : 24709;
                             break;
                         case 1:
-                            spellId = unitTarget->getGender() == GENDER_MALE ? 24711 : 24710;
+                            spellId = target->getGender() == GENDER_MALE ? 24711 : 24710;
                             break;
                         case 2:
-                            spellId = unitTarget->getGender() == GENDER_MALE ? 24712 : 24713;
+                            spellId = target->getGender() == GENDER_MALE ? 24712 : 24713;
                             break;
                         case 3:
                             spellId = 24723;
@@ -5654,14 +5625,17 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                             spellId = 24732;
                             break;
                         case 5:
-                            spellId = unitTarget->getGender() == GENDER_MALE ? 24735 : 24736;
+                            spellId = target->getGender() == GENDER_MALE ? 24735 : 24736;
                             break;
                         case 6:
                             spellId = 24740;
                             break;
                     }
 
-                    m_caster->CastSpell(unitTarget, spellId, TRIGGERED_OLD_TRIGGERED);
+                    // Remove the chosen buff to prevent duplicate stacking
+                    target->RemoveAurasDueToSpell(spellId);
+
+                    m_caster->CastSpell(target, spellId, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
                 case 24731:                                 // Cannon Fire
@@ -5675,11 +5649,16 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                 }
                 case 24737:                                 // Ghost Costume
                 {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+                    Unit* target = (unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER) ? unitTarget : m_targets.getUnitTarget();
+                    if (!target || target->GetTypeId() != TYPEID_PLAYER)
                         return;
 
+                    // Remove existing buffs to prevent duplicate stacking if clicked multiple times
+                    target->RemoveAurasDueToSpell(24735);
+                    target->RemoveAurasDueToSpell(24736);
+
                     // Ghost Costume (male or female)
-                    m_caster->CastSpell(unitTarget, unitTarget->getGender() == GENDER_MALE ? 24735 : 24736, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastSpell(target, target->getGender() == GENDER_MALE ? 24735 : 24736, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
                 case 24742:                                 // Magic Wings

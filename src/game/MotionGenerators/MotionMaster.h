@@ -150,7 +150,7 @@ class MotionMaster : private std::stack<MovementGenerator*>
         void MovePath(std::vector<G3D::Vector3>& path, float o, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, bool flying = false, bool cyclic = true);
         // MovePath can not change speed or flying mid path due to how it works - if you wish to do that, split it into two paths
         void MovePath(int32 pathId = 0, WaypointPathOrigin wpOrigin = PATH_NO_PATH, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, bool flying = false, float speed = 0.f, bool cyclic = false, ObjectGuid guid = ObjectGuid());
-        void MoveRetreat(float x, float y, float z, float o, uint32 delay);
+        void MoveRetreat(float x, float y, float z, float o, uint32 delay, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE);
         void MoveWaypoint(uint32 pathId = 0, uint32 source = 0, uint32 initialDelay = 0, uint32 overwriteEntry = 0, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, ObjectGuid guid = ObjectGuid());
         void MoveLinearWP(uint32 pathId = 0, uint32 source = 0, uint32 initialDelay = 0, uint32 overwriteEntry = 0, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, ObjectGuid guid = ObjectGuid());
         void MoveTaxi();

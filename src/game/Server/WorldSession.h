@@ -314,7 +314,7 @@ class WorldSession
         }
 
         void LogoutPlayer();
-        void KickPlayer(bool save = false, bool inPlace = false); // inplace variable needed for shutdown
+        void KickPlayer(bool save = true, bool inPlace = false); // inplace variable needed for shutdown
 
         void QueuePacket(std::unique_ptr<WorldPacket> new_packet);
 

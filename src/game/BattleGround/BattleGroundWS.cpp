@@ -41,6 +41,22 @@ void BattleGroundWS::Update(uint32 diff)
     if (GetStatus() != STATUS_IN_PROGRESS)
         return;
 
+    if (m_doorDespawnTimer)
+    {
+        if (m_doorDespawnTimer <= diff)
+        {
+            auto const& doors = m_eventObjects[MAKE_PAIR32(BG_EVENT_DOOR, 0)].gameobjects;
+            for (auto const& dbGuid : doors)
+            {
+                if (GameObject* obj = GetBgMap()->GetGameObject(dbGuid))
+                    obj->Delete();
+            }
+            m_doorDespawnTimer = 0;
+        }
+        else
+            m_doorDespawnTimer -= diff;
+    }
+
     // compute flag respawn timers
     for (uint8 i = 0; i < PVP_TEAM_COUNT; ++i)
     {
@@ -112,7 +128,7 @@ void BattleGroundWS::StartingEventOpenDoors()
 {
     OpenDoorEvent(BG_EVENT_DOOR);
 
-    // TODO implement timer to despawn doors after a short while
+    m_doorDespawnTimer = 30000;
 
     SpawnEvent(WS_EVENT_SPIRITGUIDES_SPAWN, 0, true);
     SpawnEvent(WS_EVENT_FLAG_A, 0, true);
@@ -160,12 +176,25 @@ void BattleGroundWS::RespawnFlagAtBase(Team team, bool wasCaptured)
         SendMessageToAll(LANG_BG_WS_F_PLACED, CHAT_MSG_BG_SYSTEM_NEUTRAL);
         PlaySoundToAll(BG_WS_SOUND_FLAGS_RESPAWNED);        // flag respawned sound...
     }
-    // if both team flags have been returned, reset FC debuffs like a capture would (TODO: confirm this and remove if required)
-    else if (GetBgMap()->GetVariableManager().GetVariable(wsFlagPickedUp[otherTeamIdx]) == BG_WS_FLAG_STATE_ON_BASE)
+    else
     {
         m_flagCarrierDebuffTimer = BG_WS_BRUTAL_ASSAULT_TIME;
         m_brutalAssaultActive = false;
         m_focusedAssaultActive = false;
+
+        // Blizzlike: If a flag is returned, the stalemate is broken.
+        // We must remove the debuff from the remaining flag carrier (if there is one).
+        for (uint8 i = 0; i < PVP_TEAM_COUNT; ++i)
+        {
+            if (IsFlagPickedUp((PvpTeamIndex)i))
+            {
+                if (Player* p = GetBgMap()->GetPlayer(GetFlagCarrierGuid((PvpTeamIndex)i)))
+                {
+                    p->RemoveAurasDueToSpell(BG_WS_SPELL_FOCUSED_ASSAULT);
+                    p->RemoveAurasDueToSpell(BG_WS_SPELL_BRUTAL_ASSAULT);
+                }
+            }
+        }
     }
 }
 
@@ -591,6 +620,7 @@ void BattleGroundWS::Reset()
     m_flagCarrierDebuffTimer = BG_WS_BRUTAL_ASSAULT_TIME;
     m_brutalAssaultActive = false;
     m_focusedAssaultActive = false;
+    m_doorDespawnTimer = 0;
 
     // setup graveyards
     GetBgMap()->GetGraveyardManager().SetGraveYardLinkTeam(WS_GRAVEYARD_MAIN_ALLIANCE,     BG_WS_ZONE_ID_MAIN, TEAM_INVALID);

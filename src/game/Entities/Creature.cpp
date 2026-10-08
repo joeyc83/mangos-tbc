@@ -3249,6 +3249,15 @@ void Creature::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* /*
         bool success = result != COOLDOWN_RESULT_NOT_FOUND;
         if (!success)
             success = sObjectMgr.GetCreatureCooldown(GetCreatureInfo()->Entry, spellEntry.Id, cooldown);
+            
+        // If spell has no cooldown, but creature is charmed by a player, apply a default cooldown to prevent ability spam.
+        // TBC enslaved dungeon elites shouldn't be able to spam abilities with 0 CD.
+        if (!success && HasCharmer() && GetCharmer()->IsPlayer() && spellEntry.RecoveryTime == 0 && spellEntry.CategoryRecoveryTime == 0)
+        {
+            success = true;
+            result = COOLDOWN_RESULT_FOUND;
+            cooldown = 6000; // 6 seconds default cooldown for unscripted/un-cooldown'd abilities
+        }
         if (success && cooldown) // lets see if this will one day become a problem, if it does, add -1 -1 defaults to creature spell lists
         {
             if (result == COOLDOWN_RESULT_FOUND)

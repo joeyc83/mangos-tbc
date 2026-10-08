@@ -69,8 +69,8 @@ enum
     SPELL_HEAL_BODY = 43306,            // heal body to 100% on rejoin
     SPELL_REQUEST_BODY = 43101,
     SPELL_HORSEMAN_HEAD_LANDS = 42400,            // head land visual
-    // SPELL_HEAD_INVISIBLE     = 44312,            // purpose unk
-    // SPELL_HEADS_BREATH       = 43207,            // purpose unk
+    SPELL_HEAD_INVISIBLE = 44312,
+    SPELL_HEADS_BREATH = 43207,
 
     // pumpkin spells
     SPELL_PUMPKIN_LIFE_CYCLE = 42280,            // visual root aura
@@ -95,7 +95,7 @@ enum
     // SPELL_WISP_FLIGHT_MISSILE   = 42821,         // triggers 42818
     // SPELL_WISP_INVISIBLE        = 42823,
     SPELL_ON_KILL_PROC = 43877,            // procs 13567 - use unk
-    // SPELL_ENRAGE_VISUAL         = 42438,         // use unk
+    SPELL_ENRAGE_VISUAL = 42438,
     SPELL_YELL_TIMER = 42432,
     SPELL_MANIACAL_LAUGHT_DELAYED_9 = 43893,
     SPELL_HORSEMAN_SPEAKS = 43129,
@@ -275,6 +275,9 @@ struct boss_headless_horsemanAI : public ScriptedAI
         DoCastSpellIfCan(m_creature, SPELL_BODY_REGEN_PROC, CAST_TRIGGERED);
         DoCastSpellIfCan(m_creature, SPELL_BODY_REGEN, CAST_TRIGGERED);
         DoCastSpellIfCan(m_creature, SPELL_BODY_REGEN_CONFUSE, CAST_TRIGGERED);
+        
+        if (m_creature->HasAura(SPELL_BODY_STAGE_3))
+            DoCastSpellIfCan(m_creature, SPELL_ENRAGE_VISUAL, CAST_TRIGGERED);
 
         m_fightPhase = PHASE_HEAD_TOSS;
         m_bHeadRequested = false;
@@ -385,8 +388,12 @@ struct boss_head_of_horsemanAI : public ScriptedAI
     }
 
     uint8 m_uiHeadPhase;
+    uint32 m_uiBreathTimer;
 
-    void Reset() override { }
+    void Reset() override 
+    {
+        m_uiBreathTimer = urand(4000, 8000);
+    }
 
     void AttackStart(Unit* /*pWho*/) override { }
     void MoveInLineOfSight(Unit* /*pWho*/) override { }
@@ -400,9 +407,16 @@ struct boss_head_of_horsemanAI : public ScriptedAI
             return;
         }
 
-        // rejoin and switch to next phase
-        if (m_creature->GetHealthPercent() < float(100 - m_uiHeadPhase * 33.3f))
+        uint32 thresholdHealth = uint32(m_creature->GetMaxHealth() * (100.0f - m_uiHeadPhase * 33.3f) / 100.0f);
+
+        // cap damage and switch to next phase
+        if (m_creature->GetHealth() <= damage || m_creature->GetHealth() - damage <= thresholdHealth)
         {
+            if (m_creature->GetHealth() > thresholdHealth)
+                damage = m_creature->GetHealth() - thresholdHealth;
+            else
+                damage = 0;
+
             DoRejoinHead(false);
             ++m_uiHeadPhase;
         }
@@ -440,6 +454,7 @@ struct boss_head_of_horsemanAI : public ScriptedAI
         if (eventType == AI_EVENT_CUSTOM_A)
         {
             // make visible
+            m_creature->RemoveAurasDueToSpell(SPELL_HEAD_INVISIBLE);
             DoScriptText(SAY_LOST_HEAD, m_creature);
             DoCastSpellIfCan(m_creature, SPELL_HORSEMAN_HEAD_LANDS, CAST_TRIGGERED);
             DoCastSpellIfCan(m_creature, SPELL_HEAD_VISUAL, CAST_TRIGGERED);
@@ -465,6 +480,7 @@ struct boss_head_of_horsemanAI : public ScriptedAI
         m_creature->GetMotionMaster()->MoveIdle();
 
         m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
+        DoCastSpellIfCan(m_creature, SPELL_HEAD_INVISIBLE, CAST_TRIGGERED);
         DoCastSpellIfCan(m_creature, SPELL_REQUEST_BODY, CAST_TRIGGERED);
 
         // heal body only if head is not requested by force (Horseman healed)
@@ -472,7 +488,21 @@ struct boss_head_of_horsemanAI : public ScriptedAI
             DoCastSpellIfCan(m_creature, SPELL_HEAL_BODY, CAST_TRIGGERED);
     }
 
-    void UpdateAI(const uint32 /*uiDiff*/) override { }
+    void UpdateAI(const uint32 uiDiff) override 
+    { 
+        if (m_uiHeadPhase == 3 && !m_creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE))
+        {
+            if (m_uiBreathTimer <= uiDiff)
+            {
+                if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
+                    DoCastSpellIfCan(target, SPELL_HEADS_BREATH);
+                
+                m_uiBreathTimer = urand(4000, 8000);
+            }
+            else
+                m_uiBreathTimer -= uiDiff;
+        }
+    }
 };
 
 struct SendHead : public SpellScript

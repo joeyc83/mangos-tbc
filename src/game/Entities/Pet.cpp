@@ -1024,7 +1024,11 @@ int32 Pet::GetDispTP() const
 
 void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= nullptr*/, bool removeList /*= true*/)
 {
-    MANGOS_ASSERT(!m_removed);
+    if (m_removed)
+    {
+        sLog.outError("Pet::Unsummon() called for pet that is already removed! Entry: %u, Guid: %u", GetEntry(), GetGUIDLow());
+        return;
+    }
 
     m_removed = true;
 
@@ -2393,6 +2397,9 @@ void Pet::ResetCorpseRespawn()
 
 void Pet::ForcedDespawn(uint32 timeMSToDespawn, bool onlyAlive)
 {
+    if (m_removed)
+        return;
+
     if (timeMSToDespawn)
     {
         Creature::ForcedDespawn(timeMSToDespawn, onlyAlive);

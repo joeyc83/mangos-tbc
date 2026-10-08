@@ -897,6 +897,50 @@ bool AuthSocket::_HandleRealmList()
     return true;
 }
 
+/// Returns true if the given address is a private (RFC-1918) or loopback address.
+static bool IsPrivateAddress(const boost::asio::ip::address& addr)
+{
+    if (addr.is_loopback())
+        return true;
+
+    if (addr.is_v4())
+    {
+        auto bytes = addr.to_v4().to_bytes();
+        // 10.0.0.0/8
+        if (bytes[0] == 10)
+            return true;
+        // 172.16.0.0/12
+        if (bytes[0] == 172 && (bytes[1] >= 16 && bytes[1] <= 31))
+            return true;
+        // 192.168.0.0/16
+        if (bytes[0] == 192 && bytes[1] == 168)
+            return true;
+    }
+    else if (addr.is_v6())
+    {
+        // Handle IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
+        if (addr.to_v6().is_v4_mapped())
+        {
+            auto v4 = addr.to_v6().to_v4();
+            return IsPrivateAddress(boost::asio::ip::address(v4));
+        }
+    }
+
+    return false;
+}
+
+/// Returns true if the realm address string is a private (RFC-1918) or loopback address.
+static bool IsPrivateRealmAddress(const std::string& address)
+{
+    // Strip port if present (e.g. "192.168.1.1:8085" -> "192.168.1.1")
+    std::string host = address.substr(0, address.find(':'));
+    boost::system::error_code ec;
+    auto addr = boost::asio::ip::address::from_string(host, ec);
+    if (ec)
+        return false;
+    return IsPrivateAddress(addr);
+}
+
 void AuthSocket::LoadRealmlist(ByteBuffer& pkt, uint32 acctid, uint8 securityLevel)
 {
     switch (_build)
@@ -943,8 +987,16 @@ void AuthSocket::LoadRealmlist(ByteBuffer& pkt, uint32 acctid, uint8 securityLev
                     name += buf;
                 }
 
-                // Show offline state for unsupported client builds and locked realms (1.x clients not support locked state show)
-                if (!ok_build || (i.second.allowedSecurityLevel > _accountSecurityLevel))
+                // Hide unsupported client builds
+                if (!ok_build)
+                    continue;
+
+                // Show only local realms to local clients, and only public realms to public clients
+                if (IsPrivateRealmAddress(i.second.address) != IsPrivateAddress(GetRemoteIpAddress()))
+                    continue;
+
+                // Show offline state for locked realms (1.x clients not support locked state show)
+                if (i.second.allowedSecurityLevel > _accountSecurityLevel)
                     realmflags = RealmFlags(realmflags | REALM_FLAG_OFFLINE);
 
                 uint8 categoryId = GetRealmCategoryIdByBuildAndZone(_build, RealmZone(i.second.timezone));
@@ -1002,9 +1054,13 @@ void AuthSocket::LoadRealmlist(ByteBuffer& pkt, uint32 acctid, uint8 securityLev
 
                 RealmFlags realmFlags = i.second.realmflags;
 
-                // Show offline state for unsupported client builds
+                // Hide unsupported client builds
                 if (!ok_build)
-                    realmFlags = RealmFlags(realmFlags | REALM_FLAG_OFFLINE);
+                    continue;
+
+                // Show only local realms to local clients, and only public realms to public clients
+                if (IsPrivateRealmAddress(i.second.address) != IsPrivateAddress(GetRemoteIpAddress()))
+                    continue;
 
                 if (!buildInfo)
                     realmFlags = RealmFlags(realmFlags & ~REALM_FLAG_SPECIFYBUILD);
@@ -1040,8 +1096,15 @@ uint8 AuthSocket::getEligibleRealmCount(uint8 accountSecurityLevel)
 {
     uint8 size = 0;
     for (const auto& i : sRealmList)
-        if (i.second.allowedSecurityLevel <= accountSecurityLevel)
-            size++;
+    {
+        bool ok_build = std::find(i.second.realmbuilds.begin(), i.second.realmbuilds.end(), _build) != i.second.realmbuilds.end();
+        if (!ok_build || i.second.allowedSecurityLevel > accountSecurityLevel)
+            continue;
+        // Show only local realms to local clients, and only public realms to public clients
+        if (IsPrivateRealmAddress(i.second.address) != IsPrivateAddress(GetRemoteIpAddress()))
+            continue;
+        size++;
+    }
 
     return size;
 }

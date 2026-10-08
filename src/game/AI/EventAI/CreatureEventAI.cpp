@@ -1413,7 +1413,7 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
             SetFollowMovement(action.followMovement.state != 0);
             break;
         case ACTION_T_RETREAT:
-            DoRetreat();
+            DoRetreat(action.raw.param1);
             break;
         case ACTION_T_START_ACTION_SET:
             m_setId = action.startActionSet.setId;

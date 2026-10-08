@@ -897,8 +897,15 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
     float total_value = GetModifierValue(unitMod, TOTAL_VALUE);
     float total_pct   = GetModifierValue(unitMod, TOTAL_PCT);
 
-    float weapon_mindamage = GetBaseWeaponDamage(attType, MINDAMAGE) * m_damageMultiplier;
-    float weapon_maxdamage = GetBaseWeaponDamage(attType, MAXDAMAGE) * m_damageMultiplier;
+    float damageMultiplier = m_damageMultiplier;
+    if (HasCharmer() && GetCharmer()->IsPlayer() && GetCreatureInfo()->Rank > CREATURE_ELITE_NORMAL)
+    {
+        damageMultiplier /= _GetDamageMod(GetCreatureInfo()->Rank);
+        damageMultiplier *= _GetDamageMod(CREATURE_ELITE_NORMAL);
+    }
+
+    float weapon_mindamage = GetBaseWeaponDamage(attType, MINDAMAGE) * damageMultiplier;
+    float weapon_maxdamage = GetBaseWeaponDamage(attType, MAXDAMAGE) * damageMultiplier;
 
     float mindamage = ((base_value + weapon_mindamage) * base_pct + total_value) * total_pct;
     float maxdamage = ((base_value + weapon_maxdamage) * base_pct + total_value) * total_pct;
@@ -944,8 +951,16 @@ void Creature::UpdateMaxHealth()
     UnitMods unitMod = UNIT_MOD_HEALTH;
 
     float value = GetModifierValue(unitMod, BASE_VALUE) + GetCreateHealth();
-    value *= GetModifierValue(unitMod, BASE_PCT) * m_healthMultiplier; // health multiplier affects base health AND stamina increase
-    value += GetModifierValue(unitMod, TOTAL_VALUE) + GetHealthBonusFromStamina() * m_healthMultiplier;
+    float healthMultiplier = m_healthMultiplier;
+    if (HasCharmer() && GetCharmer()->IsPlayer() && GetCreatureInfo()->Rank > CREATURE_ELITE_NORMAL)
+    {
+        healthMultiplier /= _GetHealthMod(GetCreatureInfo()->Rank);
+        healthMultiplier *= _GetHealthMod(CREATURE_ELITE_NORMAL);
+    }
+
+    value *= GetModifierValue(unitMod, BASE_PCT) * healthMultiplier; // health multiplier affects base health AND stamina increase
+    value += GetModifierValue(unitMod, TOTAL_VALUE) + GetHealthBonusFromStamina() * healthMultiplier;
+
     value *= GetModifierValue(unitMod, TOTAL_PCT);
 
     SetMaxHealth(uint32(std::round(std::max(value, 1.f))));

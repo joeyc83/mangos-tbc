@@ -34,11 +34,15 @@ struct IntimidatingShout : public SpellScript
 // 5308 - Execute
 struct WarriorExecute : public SpellScript
 {
-    void OnCast(Spell* spell) const override // confirmed main spell can not hit and child still hits
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
     {
-        int32 basePoints0 = spell->GetCaster()->CalculateSpellEffectValue(spell->m_targets.getUnitTarget(), spell->m_spellInfo, SpellEffectIndex(0))
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+            
+        int32 basePoints0 = spell->GetCaster()->CalculateSpellEffectValue(spell->m_targets.getUnitTarget(), spell->m_spellInfo, EFFECT_INDEX_0)
             + int32((spell->GetCaster()->GetPower(POWER_RAGE)) * spell->m_spellInfo->DmgMultiplier[0]);
-        SpellCastResult result = spell->GetCaster()->CastCustomSpell(spell->m_targets.getUnitTarget(), 20647, &basePoints0, nullptr, nullptr, TRIGGERED_IGNORE_CURRENT_CASTED_SPELL);
+            
+        spell->GetCaster()->CastCustomSpell(spell->m_targets.getUnitTarget(), 20647, &basePoints0, nullptr, nullptr, TRIGGERED_FULL_MASK);
     }
 };
 

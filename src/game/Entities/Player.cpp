@@ -6435,11 +6435,11 @@ void Player::SendMessageToSetInRange(WorldPacket const& data, float dist, bool s
         GetSession()->SendPacket(data);
 }
 
-void Player::SendMessageToAllWhoSeeMe(WorldPacket const& data, bool self) const
+void Player::SendMessageToAllWhoSeeMe(WorldPacket const& data, ObjectGuid skipped_receiver) const
 {
-    Unit::SendMessageToAllWhoSeeMe(data, self);
+    WorldObject::SendMessageToAllWhoSeeMe(data, skipped_receiver);
 
-    if (self)
+    if (GetObjectGuid() != skipped_receiver)
         GetSession()->SendPacket(data);
 }
 
@@ -10657,7 +10657,7 @@ Item* Player::EquipItem(uint16 pos, Item* pItem, bool update)
         pItem2->SetCount(pItem2->GetCount() + pItem->GetCount());
         if (IsInWorld() && update)
         {
-            GetMap()->AddUpdateCreateObject(pItem2);
+            GetMap()->AddUpdateObject(pItem2);
         }
 
         if (IsInWorld() && update)

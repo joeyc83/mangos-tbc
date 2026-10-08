@@ -855,18 +855,20 @@ struct HorsemanStartFirePeriodic : public AuraScript
             // reach the ground when the horseman flies ~27 yards above the fires, we will manually
             // ignite fires that are below him horizontally.
             std::list<Creature*> fires;
-            GetCreatureListWithEntryInGrid(fires, caster, NPC_HEADLESS_HORSEMAN_FIRE, 100.0f);
+            GetCreatureListWithEntryInGrid(fires, caster, NPC_HEADLESS_HORSEMAN_FIRE, 250.0f);
             
             uint32 ignitedCount = 0;
             for (Creature* fire : fires)
             {
                 if (!fire->HasAura(SPELL_FIRE))
                 {
+                    float dist = caster->GetDistance2d(fire->GetPositionX(), fire->GetPositionY());
                     // Check horizontal distance
-                    if (caster->GetDistance2d(fire->GetPositionX(), fire->GetPositionY()) < 25.0f)
+                    if (dist < 25.0f)
                     {
-                        caster->CastSpell(fire, SPELL_START_FIRE, TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST);
-                        caster->CastSpell(fire, SPELL_START_FIRE_TRAIL, TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST);
+                        uint32 hackFlags = TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_UNSELECTABLE_FLAG;
+                        caster->CastSpell(fire, SPELL_START_FIRE, hackFlags);
+                        caster->CastSpell(fire, SPELL_START_FIRE_TRAIL, hackFlags);
                         
                         ignitedCount++;
                         if (ignitedCount >= 2) // Max 2 per tick to avoid setting the whole town on fire instantly
@@ -896,14 +898,15 @@ struct HorsemanStartFireTargetTest : public SpellScript
         {
             if (Unit* caster = spell->GetCaster())
             {
+                uint32 hackFlags = TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_UNSELECTABLE_FLAG;
                 if (spell->m_spellInfo->Id == SPELL_START_FIRE_TARGET_TEST)
                 {
-                    caster->CastSpell(unitTarget, SPELL_START_FIRE, TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST);
-                    caster->CastSpell(unitTarget, SPELL_START_FIRE_TRAIL, TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST);
+                    caster->CastSpell(unitTarget, SPELL_START_FIRE, hackFlags);
+                    caster->CastSpell(unitTarget, SPELL_START_FIRE_TRAIL, hackFlags);
                 }
                 else
                 {
-                    caster->CastSpell(unitTarget, SPELL_START_FIRE_GUARD, TRIGGERED_OLD_TRIGGERED | TRIGGERED_INSTANT_CAST);
+                    caster->CastSpell(unitTarget, SPELL_START_FIRE_GUARD, hackFlags);
                     unitTarget->AI()->SendAIEvent(AI_EVENT_CUSTOM_C, unitTarget, unitTarget); // inform fire that it is involved with Fire Brigade Practice/Fire Training
                 }
             }
@@ -935,9 +938,12 @@ struct HorsemanStartFire : public SpellScript
 
         if (Unit* unitTarget = spell->GetUnitTarget())
         {
-            unitTarget->CastSpell(unitTarget, SPELL_INVISIBLE_CAMPFIRE_CREATE, TRIGGERED_NONE);
-            unitTarget->CastSpell(unitTarget, SPELL_FIRE, TRIGGERED_NONE);
-            unitTarget->CastSpell(unitTarget, SPELL_FIRE_UPDATE_SIZE, TRIGGERED_NONE); // does this belong here?
+            // Use TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_UNSELECTABLE_FLAG (0x1 | 0x4)
+            // to bypass the unselectable flag without hiding the client visual like TRIGGERED_FULL_MASK does.
+            uint32 flags = TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_UNSELECTABLE_FLAG;
+            unitTarget->CastSpell(unitTarget, SPELL_INVISIBLE_CAMPFIRE_CREATE, flags);
+            unitTarget->CastSpell(unitTarget, SPELL_FIRE, flags);
+            unitTarget->CastSpell(unitTarget, SPELL_FIRE_UPDATE_SIZE, flags);
         }
     }
 };
@@ -966,20 +972,33 @@ struct HorsemanConflagratePeriodic : public AuraScript
 // 42151 Headless Horseman - All Fires Out Test
 struct AllFiresOutTest : public SpellScript
 {
-    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
-    {
-        if (Unit* unitTarget = spell->GetUnitTarget())
-            if (unitTarget->HasAura(SPELL_FIRE))
-                spell->SetScriptValue(1); // found at least one fire still burning
-    }
-
     void OnSuccessfulFinish(Spell* spell) const override
     {
-        // no fires found, start landing phase
-        if (spell->GetScriptValue() == 0)
-            if (Unit* caster = spell->GetCaster())
+        if (Unit* caster = spell->GetCaster())
+        {
+            // The DBC spell 42151 only searches a 100-yard radius. In large towns like Azure Watch,
+            // the Horseman can be hovering > 100 yards away from the INN.
+            // We manually search 250 yards instead of relying on the DBC spell's hit targets.
+            std::list<Creature*> fires;
+            GetCreatureListWithEntryInGrid(fires, caster, NPC_HEADLESS_HORSEMAN_FIRE, 250.0f);
+            
+            bool foundFire = false;
+            for (Creature* fire : fires)
+            {
+                if (fire->HasAura(SPELL_FIRE))
+                {
+                    foundFire = true;
+                    break;
+                }
+            }
+            
+            // no fires found, start landing phase
+            if (!foundFire)
+            {
                 if (npc_shade_of_the_horsemanAI* shadeAI = dynamic_cast<npc_shade_of_the_horsemanAI*>(caster->AI()))
                     shadeAI->StartLanding();
+            }
+        }
     }
 };
 

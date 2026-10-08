@@ -59,8 +59,8 @@ class PointMovementGenerator : public MovementGenerator
 class RetreatMovementGenerator : public PointMovementGenerator
 {
     public:
-        RetreatMovementGenerator(float x, float y, float z, float o, uint32 delay) :
-            PointMovementGenerator(0, x, y, z, o, true, 0), m_delayTimer(delay), m_arrived(false) {}
+        RetreatMovementGenerator(float x, float y, float z, float o, uint32 delay, ForcedMovement forcedMovement) :
+            PointMovementGenerator(0, x, y, z, o, true, forcedMovement), m_delayTimer(delay), m_arrived(false) {}
 
         void Initialize(Unit& unit) override;
         void Finalize(Unit& unit) override;

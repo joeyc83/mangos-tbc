@@ -236,7 +236,7 @@ struct npc_belnistraszAI : public npc_escortAI
                             }
                         }
 
-                        m_creature->RemoveAurasDueToSpell(SPELL_IDOL_SHUTDOWN);
+                        m_creature->InterruptNonMeleeSpells(false);
                         SetEscortPaused(false);
 
                         // Desactivate the fires on the idol now it is extinguished

@@ -389,7 +389,7 @@ struct guardAI_stormwind : public guardAI
     void ReceiveEmote(Player* player, uint32 textEmote) override
     {
         if (player->GetTeam() == ALLIANCE)
-            DoReplyToTextEmote(textEmote);
+            DoReplyToTextEmote(player, textEmote);
     }
 };
 

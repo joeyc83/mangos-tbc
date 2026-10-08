@@ -461,6 +461,57 @@ struct TagMurlocDummy : public SpellScript
     }
 };
 
+// 182026 - Sun Gate
+#define GO_SUNHAWK_PORTAL_CONTROLLER 184850
+
+struct go_sun_gateAI : public GameObjectAI
+{
+    explicit go_sun_gateAI(GameObject* go) : GameObjectAI(go)
+    {
+        m_uiUpdateTimer = 1000;
+        m_bIsLocked = true;
+    }
+
+    uint32 m_uiUpdateTimer;
+    bool m_bIsLocked;
+
+    void UpdateAI(const uint32 uiDiff) override
+    {
+        if (m_uiUpdateTimer < uiDiff)
+        {
+            m_uiUpdateTimer = 1000;
+
+            std::list<GameObject*> controllers;
+            GetGameObjectListWithEntryInGrid(controllers, m_go, GO_SUNHAWK_PORTAL_CONTROLLER, 100.0f);
+
+            bool lock = false;
+            for (GameObject* controller : controllers)
+            {
+                if (controller->IsSpawned())
+                {
+                    lock = true;
+                    break;
+                }
+            }
+
+            if (lock && !m_bIsLocked)
+            {
+                m_bIsLocked = true;
+                m_go->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
+            }
+            else if (!lock && m_bIsLocked)
+            {
+                m_bIsLocked = false;
+                m_go->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
+            }
+        }
+        else
+        {
+            m_uiUpdateTimer -= uiDiff;
+        }
+    }
+};
+
 void AddSC_bloodmyst_isle()
 {
     Script* pNewScript = new Script;
@@ -474,6 +525,12 @@ void AddSC_bloodmyst_isle()
     pNewScript->pQuestAcceptNPC = &QuestAccept_npc_demolitionist_legoso;
     pNewScript->RegisterSelf();
 
+    pNewScript = new Script;
+    pNewScript->Name = "go_sun_gate";
+    pNewScript->GetGameObjectAI = &GetNewAIInstance<go_sun_gateAI>;
+    pNewScript->RegisterSelf();
+
     RegisterSpellScript<TagMurloc>("spell_tag_murloc");
     RegisterSpellScript<TagMurlocDummy>("spell_tag_murloc_dummy");
 }
+

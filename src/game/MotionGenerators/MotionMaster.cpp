@@ -446,10 +446,10 @@ void MotionMaster::MovePath(int32 pathId, WaypointPathOrigin wpOrigin /*= PATH_N
     Mutate(new FixedPathMovementGenerator(*m_owner, pathId, wpOrigin, forcedMovement, flying, speed, 0, cyclic, guid));
 }
 
-void MotionMaster::MoveRetreat(float x, float y, float z, float o, uint32 delay)
+void MotionMaster::MoveRetreat(float x, float y, float z, float o, uint32 delay, ForcedMovement forcedMovement)
 {
     DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s retreats for assistance (X: %f Y: %f Z: %f)", m_owner->GetGuidStr().c_str(), x, y, z);
-    Mutate(new RetreatMovementGenerator(x, y, z, o, delay));
+    Mutate(new RetreatMovementGenerator(x, y, z, o, delay, forcedMovement));
 }
 
 void MotionMaster::MoveFleeing(Unit* source, uint32 time)

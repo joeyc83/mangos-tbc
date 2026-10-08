@@ -636,6 +636,8 @@ enum
 {
     QUEST_A_FINE_MESS           = 2904,
     TRIGGER_GNOME_EXIT          = 324,                      // Add scriptlib support for it, atm simply use hardcoded values
+    NPC_ALARM_A_BOMB            = 7897,
+    SPELL_ALARM_BOMB_EXPLOSION  = 12158
 };
 
 static const float aKernobeePositions[2][3] =
@@ -653,8 +655,12 @@ struct npc_kernobeeAI : public FollowerAI
     }
 
     uint32 m_uiCheckEndposTimer;
+    ObjectGuid m_uiAlarmBotGuid;
 
-    void Reset() override {}
+    void Reset() override
+    {
+        m_uiAlarmBotGuid.Clear();
+    }
 
     void ReceiveAIEvent(AIEventType eventType, Unit* /*pSender*/, Unit* pInvoker, uint32 uiMiscValue) override
     {
@@ -663,6 +669,12 @@ struct npc_kernobeeAI : public FollowerAI
             // No idea why he has UNIT_STAND_STATE_DEAD in UDB ..
             m_creature->SetStandState(UNIT_STAND_STATE_STAND);
             StartFollow((Player*)pInvoker, 0, GetQuestTemplateStore(uiMiscValue));
+
+            if (Creature* pBomb = m_creature->SummonCreature(NPC_ALARM_A_BOMB, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation(), TEMPSPAWN_CORPSE_DESPAWN, 0))
+            {
+                m_uiAlarmBotGuid = pBomb->GetObjectGuid();
+                pBomb->GetMotionMaster()->MoveFollow(m_creature, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
+            }
         }
     }
 
@@ -683,6 +695,12 @@ struct npc_kernobeeAI : public FollowerAI
                     pPlayer->RewardPlayerAndGroupAtEventExplored(QUEST_A_FINE_MESS, m_creature);
                 m_creature->GetMotionMaster()->MovePoint(1, aKernobeePositions[1][0], aKernobeePositions[1][1], aKernobeePositions[1][2]);
                 m_creature->ForcedDespawn(2000);
+
+                if (Creature* pBomb = m_creature->GetMap()->GetCreature(m_uiAlarmBotGuid))
+                {
+                    pBomb->CastSpell(pBomb, SPELL_ALARM_BOMB_EXPLOSION, TRIGGERED_OLD_TRIGGERED);
+                    pBomb->ForcedDespawn(2000);
+                }
             }
         }
         else

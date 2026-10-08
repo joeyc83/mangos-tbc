@@ -1725,7 +1725,7 @@ class Player : public Unit
         void SendMessageToSetInRange(WorldPacket const& data, float dist, bool self) const override;
         // overwrite Object::SendMessageToSetInRange
         void SendMessageToSetInRange(WorldPacket const& data, float dist, bool self, bool own_team_only) const;
-        void SendMessageToAllWhoSeeMe(WorldPacket const& data, bool self) const override;
+        void SendMessageToAllWhoSeeMe(WorldPacket const& data, ObjectGuid skipped_receiver = ObjectGuid()) const override;
 
         Corpse* GetCorpse() const;
         void SpawnCorpseBones();

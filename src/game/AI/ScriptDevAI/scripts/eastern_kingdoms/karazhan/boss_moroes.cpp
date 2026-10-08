@@ -128,6 +128,7 @@ struct boss_moroesAI : public CombatAI
         {
             DoScriptText(urand(0, 1) ? SAY_SPECIAL_1 : SAY_SPECIAL_2, m_creature);
             m_creature->RemoveAurasDueToSpell(SPELL_TAUNT);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             SetMeleeEnabled(true);
             SetCombatScriptStatus(false);
             m_attackAngle = 0.f;
@@ -239,6 +240,7 @@ struct boss_moroesAI : public CombatAI
                 DoCastSpellIfCan(nullptr, SPELL_VANISH);
                 SetCombatScriptStatus(true);
                 SetMeleeEnabled(false);
+                m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
                 m_attackAngle = M_PI_F;
                 DoStartMovement(m_creature->GetVictim());
                 ResetCombatAction(action, GetSubsequentActionTimer(action));

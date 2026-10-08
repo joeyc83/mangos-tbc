@@ -2790,8 +2790,15 @@ SpellAuraProcResult Unit::HandleModCastingSpeedNotStackAuraProc(ProcExecutionDat
 SpellAuraProcResult Unit::HandleReflectSpellsSchoolAuraProc(ProcExecutionData& data)
 {
     Aura* triggeredByAura = data.triggeredByAura; SpellEntry const* spellInfo = data.spellInfo;
-    // Skip Melee hits and spells ws wrong school
-    return !(spellInfo == nullptr || (triggeredByAura->GetModifier()->m_miscvalue & spellInfo->SchoolMask) == 0) ? SPELL_AURA_PROC_OK : SPELL_AURA_PROC_FAILED;
+    
+    if (spellInfo == nullptr || (triggeredByAura->GetModifier()->m_miscvalue & spellInfo->SchoolMask) == 0)
+        return SPELL_AURA_PROC_FAILED;
+
+    // Mind Soothe and Mind Vision do not consume Spell Reflection (classified as 'physical' for reflect consumption)
+    if (spellInfo->SpellFamilyName == SPELLFAMILY_PRIEST && (spellInfo->SpellFamilyFlags & 0x0000004004000000ULL))
+        return SPELL_AURA_PROC_FAILED;
+
+    return SPELL_AURA_PROC_OK;
 }
 
 SpellAuraProcResult Unit::HandleModPowerCostSchoolAuraProc(ProcExecutionData& data)

@@ -110,6 +110,7 @@ namespace VMAP
     // Check if specified map have tile loaded
     bool VMapManager2::IsTileLoaded(uint32 mapId, uint32 x, uint32 y) const
     {
+        std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_vmStaticMapMutex));
         InstanceTreeMap::const_iterator instanceTree = iInstanceMapTrees.find(mapId);
         if (instanceTree == iInstanceMapTrees.end() || instanceTree->second == nullptr)
             return false;
@@ -121,6 +122,7 @@ namespace VMAP
 
     bool VMapManager2::_loadMap(unsigned int mapId, const std::string& basePath, uint32 tileX, uint32 tileY)
     {
+        std::lock_guard<std::mutex> lock(m_vmStaticMapMutex);
         InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(mapId);
         if (instanceTree == iInstanceMapTrees.end())
         {
@@ -141,10 +143,7 @@ namespace VMAP
             }
 
             // insert new data
-            {
-                std::lock_guard<std::mutex> lock(m_vmStaticMapMutex);
-                instanceTree->second = newTree;
-            }
+            instanceTree->second = newTree;
         }
         return instanceTree->second->LoadMapTile(tileX, tileY, this);
     }
@@ -153,6 +152,7 @@ namespace VMAP
 
     void VMapManager2::unloadMap(unsigned int pMapId)
     {
+        std::lock_guard<std::mutex> lock(m_vmStaticMapMutex);
         InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(pMapId);
         if (instanceTree != iInstanceMapTrees.end() && instanceTree->second)
         {
@@ -169,6 +169,7 @@ namespace VMAP
 
     void VMapManager2::unloadMap(unsigned int  pMapId, int x, int y)
     {
+        std::lock_guard<std::mutex> lock(m_vmStaticMapMutex);
         InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(pMapId);
         if (instanceTree != iInstanceMapTrees.end() && instanceTree->second)
         {

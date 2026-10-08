@@ -68,7 +68,8 @@ void instance_uldaman::OnCreatureCreate(Creature* pCreature)
             m_lWardens.push_back(pCreature->GetObjectGuid());
             break;
         case NPC_STONE_KEEPER:
-            m_lKeepers.push_back(pCreature->GetObjectGuid());
+            if (std::find(m_lKeepers.begin(), m_lKeepers.end(), pCreature->GetObjectGuid()) == m_lKeepers.end())
+                m_lKeepers.push_back(pCreature->GetObjectGuid());
             break;
         case NPC_ARCHAEDAS:
             m_npcEntryGuidStore[NPC_ARCHAEDAS] = pCreature->GetObjectGuid();

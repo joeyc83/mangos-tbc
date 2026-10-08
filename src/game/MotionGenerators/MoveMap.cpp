@@ -168,7 +168,8 @@ namespace MMAP
     void MMapManager::loadAllMapTiles(std::string const& basePath, uint32 mapId)
     {
         auto itr = loadedMMaps.find(mapId);
-        MANGOS_ASSERT(itr != loadedMMaps.end());
+        if (itr == loadedMMaps.end())
+            return;
         const auto& mmapData = itr->second;
 
         if (mmapData->fullLoaded)
@@ -199,7 +200,8 @@ namespace MMAP
     {
         // get this mmap data
         auto itr = loadedMMaps.find(mapId);
-        MANGOS_ASSERT(itr != loadedMMaps.end()); // must not occur here as it would not be thread safe - only in loadMapData through loadMapInstance
+        if (itr == loadedMMaps.end())
+            return false; // Do not assert. If the base mmap failed to load during Map init, we simply have no mmap for this map.
 
         const auto& mmapData = itr->second;
 

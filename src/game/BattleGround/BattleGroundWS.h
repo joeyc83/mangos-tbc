@@ -256,6 +256,8 @@ class BattleGroundWS : public BattleGround
         bool m_focusedAssaultActive;
         bool m_brutalAssaultActive;
 
+        uint32 m_doorDespawnTimer;
+
         uint32 m_reputationCapture;
         uint32 m_honorWinKills;
         uint32 m_honorEndKills;

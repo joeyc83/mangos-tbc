@@ -76,8 +76,10 @@ struct guardAI : public CombatAI
 
         uint32 m_IncapacitatingShoutTimer;
         uint32 m_NetTimer;
+        uint32 m_returnOrientationTimer;
 
         void Reset() override;
+        void UpdateAI(const uint32 diff) override;
 
         void Aggro(Unit* who) override;
 
@@ -85,7 +87,7 @@ struct guardAI : public CombatAI
         void JustRespawned() override;
 
         // Commonly used for guards in main cities
-        void DoReplyToTextEmote(uint32 textEmote);
+        void DoReplyToTextEmote(Player* player, uint32 textEmote);
 };
 
 struct guardAI_orgrimmar : public guardAI

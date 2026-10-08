@@ -461,7 +461,7 @@ class UnitAI : public CombatActions
         AIOrders GetAIOrder() const { return m_currentAIOrder; }
 
         bool DoFlee(uint32 duration = 0);
-        virtual bool DoRetreat() { return false; } // implemented for creatures
+        virtual bool DoRetreat(uint32 /*forcedMovement*/ = 0) { return false; } // implemented for creatures
         void DoDistance(); // TODO
         virtual void DoCallForHelp(float /*radius*/) {} // implemented for creatures
 

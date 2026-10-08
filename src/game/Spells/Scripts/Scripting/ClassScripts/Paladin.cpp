@@ -181,6 +181,31 @@ struct PaladinTier6Trinket : public AuraScript
 // 31789 - Righteous Defense
 struct RighteousDefense : public SpellScript
 {
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        Unit* target = spell->m_targets.getUnitTarget();
+        if (!target)
+            return SPELL_CAST_OK;
+
+        Unit* caster = spell->GetCaster();
+        if (spell->m_spellInfo->HasAttribute(SPELL_ATTR_EX5_IMPLIED_TARGETING))
+        {
+            if (!caster->CanAssistSpell(target, spell->m_spellInfo))
+            {
+                if (Unit* targetOfUnitTarget = target->GetTarget(caster))
+                {
+                    if (caster->CanAssistSpell(targetOfUnitTarget, spell->m_spellInfo))
+                        target = targetOfUnitTarget;
+                }
+            }
+        }
+
+        if (target->getAttackers().empty())
+            return SPELL_FAILED_BAD_TARGETS;
+
+        return SPELL_CAST_OK;
+    }
+
     bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
     {
         if (target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED) || spell->GetCaster()->CanAssistSpell(target, spell->m_spellInfo))
@@ -199,13 +224,8 @@ struct RighteousDefense : public SpellScript
             return;
         Unit* caster = spell->GetCaster();
 
-        // non-standard cast requirement check
         if (unitTarget->getAttackers().empty())
-        {
-            caster->RemoveSpellCooldown(*spell->m_spellInfo, true);
-            spell->SendCastResult(SPELL_FAILED_TARGET_AFFECTING_COMBAT);
             return;
-        }
 
         // not empty (checked), copy
         Unit::AttackerSet attackers = unitTarget->getAttackers();
@@ -297,6 +317,154 @@ struct JudgementOfCommand : public SpellScript
     }
 };
 
+
+// 20473, 20929, 20930, 27174, 33072 - Holy Shock
+struct HolyShock : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* unitTarget = spell->GetUnitTarget();
+        if (!unitTarget)
+            return;
+
+        uint32 hurt = 0;
+        uint32 heal = 0;
+        switch (spell->m_spellInfo->Id)
+        {
+            case 20473: hurt = 25912; heal = 25914; break;
+            case 20929: hurt = 25911; heal = 25913; break;
+            case 20930: hurt = 25902; heal = 25903; break;
+            case 27174: hurt = 27176; heal = 27175; break;
+            case 33072: hurt = 33073; heal = 33074; break;
+            default: return;
+        }
+
+        if (spell->GetCaster()->CanAssistSpell(unitTarget, spell->m_spellInfo))
+            spell->GetCaster()->CastSpell(unitTarget, heal, TRIGGERED_OLD_TRIGGERED);
+        else
+            spell->GetCaster()->CastSpell(unitTarget, hurt, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+// 20154 etc. - Seal of Righteousness Proc
+struct SealOfRighteousnessProc : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        if (aura->GetEffIndex() != EFFECT_INDEX_0)
+            return SPELL_AURA_PROC_FAILED;
+
+        if (aura->GetCaster()->GetTypeId() != TYPEID_PLAYER)
+            return SPELL_AURA_PROC_FAILED;
+
+        uint32 spellId;
+        switch (aura->GetId())
+        {
+            case 20154: spellId = 25742; break;     // Rank 1
+            case 21084: spellId = 25741; break;     // Rank 1.5
+            case 20287: spellId = 25740; break;     // Rank 2
+            case 20288: spellId = 25739; break;     // Rank 3
+            case 20289: spellId = 25738; break;     // Rank 4
+            case 20290: spellId = 25737; break;     // Rank 5
+            case 20291: spellId = 25736; break;     // Rank 6
+            case 20292: spellId = 25735; break;     // Rank 7
+            case 20293: spellId = 25713; break;     // Rank 8
+            case 27155: spellId = 27156; break;     // Rank 9
+            default: return SPELL_AURA_PROC_FAILED;
+        }
+
+        Player* player = (Player*)aura->GetCaster();
+        Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+        float speed = (item ? item->GetProto()->Delay : BASE_ATTACK_TIME) / 1000.0f;
+
+        float damageBasePoints;
+        float coeff;
+        if (item && item->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+        {
+            damageBasePoints = 1.20f * aura->GetModifier()->m_amount * 1.2f * 1.03f * speed / 100.0f + 1;
+            coeff = .108f * speed;
+        }
+        else
+        {
+            damageBasePoints = 0.85f * ceil(aura->GetModifier()->m_amount * 1.2f * 1.03f * speed / 100.0f) - 1;
+            coeff = .092f * speed;
+        }
+
+        int32 damagePoint = int32(damageBasePoints + 0.03f * (player->GetBaseWeaponDamage(BASE_ATTACK, MINDAMAGE) + player->GetBaseWeaponDamage(BASE_ATTACK, MAXDAMAGE)) / 2.0f) + 1;
+
+        if (damagePoint >= 0)
+        {
+            int32 bonusDamage = player->SpellBaseDamageBonusDone(GetSpellSchoolMask(aura->GetSpellProto())) + procData.victim->SpellBaseDamageBonusTaken(GetSpellSchoolMask(aura->GetSpellProto()));
+            if (Aura* impAura = player->GetAura(43743, EFFECT_INDEX_0)) // Improved Seal of Righteousness
+                bonusDamage += impAura->GetAmount();
+            damagePoint += bonusDamage * coeff * player->CalculateLevelPenalty(aura->GetSpellProto());
+        }
+
+        player->CastCustomSpell(procData.victim, spellId, &damagePoint, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, aura);
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+// 31804 - Judgement of Vengeance
+struct JudgementOfVengeance : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        uint32 stacks = 0;
+        Unit::AuraList const& auras = spell->GetUnitTarget()->GetAurasByType(SPELL_AURA_PERIODIC_DAMAGE);
+        for (auto aura : auras)
+        {
+            if ((aura->GetId() == 31803) && aura->GetCasterGuid() == spell->GetCaster()->GetObjectGuid())
+            {
+                stacks = aura->GetStackAmount();
+                break;
+            }
+        }
+        if (!stacks)
+            spell->SetDamage(-1);
+        else
+            spell->SetDamage(spell->GetDamage() * stacks);
+    }
+};
+
+// 20216 etc - Illumination
+struct Illumination : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        if (!procData.spellInfo)
+            return SPELL_AURA_PROC_FAILED;
+
+        uint32 originalSpellId = procData.spellInfo->Id;
+
+        if (procData.spellInfo->SpellFamilyFlags & uint64(0x0001000000000000))
+        {
+            switch (procData.spellInfo->Id)
+            {
+                case 25914: originalSpellId = 20473; break;
+                case 25913: originalSpellId = 20929; break;
+                case 25903: originalSpellId = 20930; break;
+                case 27175: originalSpellId = 27174; break;
+                case 33074: originalSpellId = 33072; break;
+                default: return SPELL_AURA_PROC_FAILED;
+            }
+        }
+
+        SpellEntry const* originalSpell = sSpellTemplate.LookupEntry<SpellEntry>(originalSpellId);
+        if (!originalSpell)
+            return SPELL_AURA_PROC_FAILED;
+
+        int32 cost = originalSpell->manaCost;
+        procData.basepoints[0] = cost * aura->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1) / 100;
+        procData.triggerTarget = aura->GetCaster();
+        procData.triggeredSpellId = 20272;
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
 void LoadPaladinScripts()
 {
     RegisterSpellScript<JudgementOfLightIntermediate>("spell_judgement_of_light_intermediate");
@@ -310,4 +478,8 @@ void LoadPaladinScripts()
     RegisterSpellScript<PaladinTier6Trinket>("spell_paladin_tier_6_trinket");
     RegisterSpellScript<BlessingOfLight>("spell_blessing_of_light");
     RegisterSpellScript<JudgementOfCommand>("spell_judgement_of_command");
+    RegisterSpellScript<HolyShock>("spell_pal_holy_shock");
+    RegisterSpellScript<SealOfRighteousnessProc>("spell_seal_of_righteousness_proc");
+    RegisterSpellScript<JudgementOfVengeance>("spell_judgement_of_vengeance");
+    RegisterSpellScript<Illumination>("spell_pal_illumination");
 }

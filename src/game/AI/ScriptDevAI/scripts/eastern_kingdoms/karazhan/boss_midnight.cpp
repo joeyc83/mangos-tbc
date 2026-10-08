@@ -276,7 +276,10 @@ struct boss_attumenAI : public CombatAI
 
             // The summoned has the health equal to the one which has the higher HP percentage of both
             if (Creature* midnight = m_instance->GetSingleCreatureFromStorage(NPC_MIDNIGHT))
-                summoned->SetHealth(midnight->GetHealth() > m_creature->GetHealth() ? midnight->GetHealth() : m_creature->GetHealth());
+            {
+                float maxPct = std::max(midnight->GetHealthPercent(), m_creature->GetHealthPercent());
+                summoned->SetHealth(uint32(summoned->GetMaxHealth() * maxPct / 100.0f));
+            }
         }
     }
 
@@ -307,7 +310,13 @@ struct MidnightMount : public SpellScript
                     midnightAI->DoPrepareMount(static_cast<Creature*>(target));
 
                 if (boss_attumenAI* attumenAI = dynamic_cast<boss_attumenAI*>(target->AI()))
+                {
                     attumenAI->SetActionReadyStatus(ATTUMEN_MOUNT, false);
+                    attumenAI->SetCombatMovement(false);
+                    attumenAI->SetReactState(REACT_PASSIVE);
+                    target->GetMotionMaster()->Clear(false);
+                    target->StopMoving();
+                }
             }
         }
     }

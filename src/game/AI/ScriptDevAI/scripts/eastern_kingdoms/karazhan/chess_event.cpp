@@ -217,7 +217,7 @@ struct npc_echo_of_medivhAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiCheatTimer = 90000;
+        m_uiCheatTimer = urand(15000, 35000);
     }
 
     void MoveInLineOfSight(Unit* /*pWho*/) override { }
@@ -247,7 +247,7 @@ struct npc_echo_of_medivhAI : public ScriptedAI
             }
 
             DoScriptText(EMOTE_CHEAT, m_creature);
-            m_uiCheatTimer = 90000;
+            m_uiCheatTimer = urand(15000, 35000);
         }
         else
             m_uiCheatTimer -= uiDiff;
@@ -324,13 +324,14 @@ struct npc_chess_piece_genericAI : public Scripted_NoMovementAI
         m_uiSpellCommandTimer = m_creature->HasAura(SPELL_CONTROL_PIECE) ? 0 : 1000;
         m_bIsPrimarySpell = true;
 
-        // cancel move timer for player faction npcs or for friendly games
+        // Disable AI movement for pieces on the player's side (or when directly controlled)
         if (m_pInstance)
         {
-            // Reason why != is because when player takes control, chess piece gets his faction
-            if ((m_pInstance->GetPlayerTeam() == ALLIANCE && m_creature->GetFaction() != FACTION_ID_CHESS_HORDE) ||
-                    (m_pInstance->GetPlayerTeam() == HORDE && m_creature->GetFaction() != FACTION_ID_CHESS_ALLIANCE) ||
-                    m_pInstance->GetData(TYPE_CHESS) == DONE)
+            uint32 templateFaction = m_creature->GetCreatureInfo()->Faction;
+            bool isPlayerPiece = (m_pInstance->GetPlayerTeam() == ALLIANCE && templateFaction == FACTION_ID_CHESS_ALLIANCE) ||
+                                 (m_pInstance->GetPlayerTeam() == HORDE    && templateFaction == FACTION_ID_CHESS_HORDE);
+
+            if (isPlayerPiece || m_creature->HasAura(SPELL_CONTROL_PIECE) || m_pInstance->GetData(TYPE_CHESS) == DONE)
                 m_uiMoveCommandTimer = 0;
         }
     }
@@ -397,11 +398,6 @@ struct npc_chess_piece_genericAI : public Scripted_NoMovementAI
         // update facing
         if (Unit* pTarget = GetTargetByType(TARGET_TYPE_RANDOM, 5.0f))
             DoCastSpellIfCan(pTarget, SPELL_CHANGE_FACING);
-        else
-        {
-            m_creature->SetFacingTo(m_fCurrentOrientation);
-        }
-            
     }
 
     void SpellHit(Unit* pCaster, const SpellEntry* pSpell) override
@@ -417,11 +413,12 @@ struct npc_chess_piece_genericAI : public Scripted_NoMovementAI
         if (!m_pInstance)
             return nullptr;
 
-        uint32 uiTeam = m_creature->GetFaction() == FACTION_ID_CHESS_ALLIANCE ? FACTION_ID_CHESS_HORDE : FACTION_ID_CHESS_ALLIANCE;
+        uint32 originalFaction = m_creature->GetCreatureInfo()->Faction;
+        uint32 uiTeam = originalFaction == FACTION_ID_CHESS_ALLIANCE ? FACTION_ID_CHESS_HORDE : FACTION_ID_CHESS_ALLIANCE;
 
         // get friendly list for this type
         if (uiType == TARGET_TYPE_FRIENDLY)
-            uiTeam = m_creature->GetFaction();
+            uiTeam = originalFaction;
 
         // Get the list of enemies
         GuidList lTempList;
@@ -458,44 +455,48 @@ struct npc_chess_piece_genericAI : public Scripted_NoMovementAI
         if (!m_pInstance)
             return nullptr;
 
-        // define distance based on the spell radius
-        // this will replace the targeting sysmte of spells SPELL_MOVE_1 and SPELL_MOVE_2 - HACK
-        float fRadius = 10.0f;
-        std::list<Creature*> lSquaresList;
+        float fExactRadius = 8.5f;
 
         // some pieces have special distance
         switch (m_creature->GetEntry())
         {
             case NPC_HUMAN_CONJURER:
             case NPC_ORC_WARLOCK:
+                fExactRadius = 17.5f;
+                break;
             case NPC_HUMAN_CHARGER:
             case NPC_ORC_WOLF:
-                fRadius = 15.0f;
+                fExactRadius = 13.0f;
                 break;
         }
 
+        std::list<Creature*> lSquaresList;
         // get all available squares for movement
-        GetCreatureListWithEntryInGrid(lSquaresList, m_creature, NPC_SQUARE_BLACK, fRadius);
-        GetCreatureListWithEntryInGrid(lSquaresList, m_creature, NPC_SQUARE_WHITE, fRadius);
+        // grid search adds combat reach (~5.5y), so we search a bit wider and filter exactly
+        GetCreatureListWithEntryInGrid(lSquaresList, m_creature, NPC_SQUARE_BLACK, fExactRadius);
+        GetCreatureListWithEntryInGrid(lSquaresList, m_creature, NPC_SQUARE_WHITE, fExactRadius);
 
         for (auto itr = lSquaresList.begin(); itr != lSquaresList.end(); )
         {
             Creature* square = (*itr);
-            if (square->HasAura(SPELL_IS_SQUARE_USED))
+            if (square->HasAura(SPELL_IS_SQUARE_USED) || m_creature->GetDistance(square, false, DIST_CALC_NONE) > fExactRadius || m_creature->GetDistance(square, false, DIST_CALC_NONE) < 1.0f)
+            {
                 itr = lSquaresList.erase(itr);
+            }
             else
                 ++itr;
         }
-            
 
         if (lSquaresList.empty())
             return nullptr;
 
-        // Get the list of enemies
+        // Get the list of enemies using original template faction (runtime faction changes when piece is possessed by player)
         GuidList lTempList;
         std::list<Creature*> lEnemies;
 
-        m_pInstance->GetChessPiecesByFaction(lTempList, m_creature->GetFaction() == FACTION_ID_CHESS_ALLIANCE ? FACTION_ID_CHESS_HORDE : FACTION_ID_CHESS_ALLIANCE);
+        uint32 originalFaction = m_creature->GetCreatureInfo()->Faction;
+        uint32 enemyFaction = originalFaction == FACTION_ID_CHESS_ALLIANCE ? FACTION_ID_CHESS_HORDE : FACTION_ID_CHESS_ALLIANCE;
+        m_pInstance->GetChessPiecesByFaction(lTempList, enemyFaction);
         for (GuidList::const_iterator itr = lTempList.begin(); itr != lTempList.end(); ++itr)
         {
             Creature* pTemp = m_creature->GetMap()->GetCreature(*itr);
@@ -510,7 +511,10 @@ struct npc_chess_piece_genericAI : public Scripted_NoMovementAI
         lEnemies.sort(ObjectDistanceOrder(m_creature));
         lSquaresList.sort(ObjectDistanceOrder(lEnemies.front()));
 
-        return lSquaresList.front();
+        Creature* chosen = lSquaresList.front();
+        sLog.outString("Chess [%s]: Chose square at (%.1f, %.1f) - hasAura=%d",
+            m_creature->GetName(), chosen->GetPositionX(), chosen->GetPositionY(), chosen->HasAura(SPELL_IS_SQUARE_USED));
+        return chosen;
     }
 
     virtual uint32 DoCastPrimarySpell() { return 5000; }
@@ -526,33 +530,22 @@ struct npc_chess_piece_genericAI : public Scripted_NoMovementAI
         {
             if (m_uiMoveCommandTimer <= uiDiff)
             {
-                // just update facing if some enemy is near
-                if (Unit* pTarget = GetTargetByType(TARGET_TYPE_RANDOM, 5.0f))
-                    DoCastSpellIfCan(pTarget, SPELL_CHANGE_FACING);
-                else
-                {
-                    // the npc doesn't have a 100% chance to move; also there should be some GCD check in core for this part
-                    if (roll_chance_i(15))
-                    {
-                        // Note: in a normal case the target would be chosen using the spells above
-                        // However, because the core doesn't support special targeting, we'll provide explicit target
-                        //uint32 uiMoveSpell = SPELL_MOVE_1;
-                        //switch (m_creature->GetEntry())
-                        //{
-                        //    case NPC_HUMAN_CONJURER:
-                        //    case NPC_ORC_WARLOCK:
-                        //    case NPC_HUMAN_CHARGER:
-                        //    case NPC_ORC_WOLF:
-                        //        uiMoveSpell = SPELL_MOVE_2;
-                        //        break;
-                        //}
-                        //DoCastSpellIfCan(m_creature, uiMoveSpell, CAST_TRIGGERED);
+                bool bInFire = GetClosestCreatureWithEntry(m_creature, NPC_FURY_MEDIVH_VISUAL, 4.0f) != nullptr;
 
-                        m_fCurrentOrientation = m_creature->GetOrientation();
-                        // workaround which provides specific move target
-                        if (Unit* spellTarget = GetMovementSquare())
-                            spellTarget->CastSpell(m_creature, SPELL_MOVE_TO_SQUARE, TRIGGERED_NONE);
+                // Priority 1: Run out of fire immediately
+                if (bInFire || roll_chance_i(15))
+                {
+                    m_fCurrentOrientation = m_creature->GetOrientation();
+                    // workaround which provides specific move target
+                    if (Unit* spellTarget = GetMovementSquare())
+                    {
+                        spellTarget->CastSpell(m_creature, SPELL_MOVE_TO_SQUARE, TRIGGERED_NONE);
                     }
+                }
+                else if (Unit* pTarget = GetTargetByType(TARGET_TYPE_RANDOM, 5.0f))
+                {
+                    // just update facing if some enemy is near
+                    DoCastSpellIfCan(pTarget, SPELL_CHANGE_FACING);
                 }
 
                 m_uiMoveCommandTimer = 5000;
@@ -582,7 +575,8 @@ struct npc_chess_piece_genericAI : public Scripted_NoMovementAI
                 if (Creature* pSquare = m_creature->GetMap()->GetCreature(m_currentSquareGuid))
                 {
                     DoCastSpellIfCan(pSquare, SPELL_MOVE_MARKER, CAST_TRIGGERED);
-                    m_creature->GetMotionMaster()->MovePoint(1, pSquare->GetPositionX(), pSquare->GetPositionY(), pSquare->GetPositionZ());
+                    // Teleport instantly to the destination square instead of walking (walking phases through other pieces)
+                    m_creature->NearTeleportTo(pSquare->GetPositionX(), pSquare->GetPositionY(), pSquare->GetPositionZ(), m_fCurrentOrientation);
                 }
                 m_uiMoveTimer = 0;
             }
@@ -625,6 +619,10 @@ struct ChessMoveToSquare : public SpellScript
     {
         Unit* caster = spell->GetCaster();
         Unit* target = spell->GetUnitTarget();
+        if (!caster || !target)
+            return;
+
+        // Mark the DESTINATION square as occupied immediately so other pieces cannot also move there
         if (caster->IsCreature())
         {
             caster->CastSpell(nullptr, SPELL_DISABLE_SQUARE, TRIGGERED_OLD_TRIGGERED);
@@ -752,7 +750,7 @@ struct npc_king_llaneAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_HEROISM);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -766,7 +764,7 @@ struct npc_king_llaneAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_SWEEP);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -865,7 +863,7 @@ struct npc_warchief_blackhandAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_BLOODLUST);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -879,7 +877,7 @@ struct npc_warchief_blackhandAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_CLEAVE);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -941,7 +939,7 @@ struct npc_human_conjurerAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_ELEMENTAL_BLAST);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -955,7 +953,7 @@ struct npc_human_conjurerAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_RAIN_OF_FIRE);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1017,7 +1015,7 @@ struct npc_orc_warlockAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_FIREBALL);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1031,7 +1029,7 @@ struct npc_orc_warlockAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_POISON_CLOUD_ACTION);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1107,7 +1105,7 @@ struct npc_human_footmanAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_HEROIC_BLOW);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1121,7 +1119,7 @@ struct npc_human_footmanAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_SHIELD_BLOCK);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1197,7 +1195,7 @@ struct npc_orc_gruntAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_VICIOUS_STRIKE);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1211,7 +1209,7 @@ struct npc_orc_gruntAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_WEAPON_DEFLECTION);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1273,7 +1271,7 @@ struct npc_water_elementalAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_GEYSER);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1287,7 +1285,7 @@ struct npc_water_elementalAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_WATER_SHIELD);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1349,7 +1347,7 @@ struct npc_summoned_daemonAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_HELLFIRE_CHESS);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1363,7 +1361,7 @@ struct npc_summoned_daemonAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_FIRE_SHIELD);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1425,7 +1423,7 @@ struct npc_human_chargerAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_SMASH);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1439,7 +1437,7 @@ struct npc_human_chargerAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_STOMP);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1501,7 +1499,7 @@ struct npc_orc_wolfAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_BITE);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1515,7 +1513,7 @@ struct npc_orc_wolfAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_HOWL);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1577,7 +1575,7 @@ struct npc_human_clericAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_HEALING);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1591,7 +1589,7 @@ struct npc_human_clericAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_HOLY_LANCE);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1653,7 +1651,7 @@ struct npc_orc_necrolyteAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_SHADOW_MEND_ACTION);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;
@@ -1667,7 +1665,7 @@ struct npc_orc_necrolyteAI : public npc_chess_piece_genericAI
 
             // reset timer based on spell values
             const SpellEntry* pSpell = GetSpellStore()->LookupEntry<SpellEntry>(SPELL_SHADOW_SPEAR);
-            return pSpell->RecoveryTime ? pSpell->RecoveryTime : pSpell->CategoryRecoveryTime;
+            return pSpell->RecoveryTime ? pSpell->RecoveryTime : (pSpell->CategoryRecoveryTime ? pSpell->CategoryRecoveryTime : 5000);
         }
 
         return 5000;

@@ -2589,6 +2589,19 @@ struct GossipNPCPeriodicTriggerTalk : public SpellScript
 
         int32 textId = 0;
         GossipNPCEvents events = ai->m_chosenEvent;
+        
+        // Dynamically resolve event if the NPC was already spawned when the event started
+        if (events == GOSSIP_EVENT_DARK_PORTAL)
+        {
+            if (sGameEventMgr.IsActiveHoliday(HOLIDAY_FEAST_OF_WINTER_VEIL)) events = GOSSIP_EVENT_WINTER_VEIL;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_LUNAR_FESTIVAL)) events = GOSSIP_EVENT_LUNAR_FESTIVAL;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_HALLOWS_END)) events = GOSSIP_EVENT_HALLOWS_END;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_BREWFEST)) events = GOSSIP_EVENT_BREWFEST;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_PIRATES_DAY)) events = GOSSIP_EVENT_PIRATES_DAY;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_FIRE_FESTIVAL)) events = GOSSIP_EVENT_MIDSUMMER;
+            else if (sGameEventMgr.IsActiveEvent(GAME_EVENT_SPIRIT_OF_COMPETITION)) events = GOSSIP_EVENT_SPIRIT_OF_COMPETITION;
+        }
+
         if (events == GOSSIP_EVENT_WINTER_VEIL)
         {
             switch (spell->GetCaster()->GetEntry())
@@ -2702,7 +2715,7 @@ struct GossipNPCPeriodicTriggerTalk : public SpellScript
 
         if (events == GOSSIP_EVENT_PIRATES_DAY)
         {
-
+            textId = 27423; // "The Dread Captain DeMeza has pulled into Booty Bay and declared it Pirates' Day!..."
         }
 
         if (events == GOSSIP_EVENT_SPIRIT_OF_COMPETITION)
@@ -2805,7 +2818,7 @@ enum GossipNpcGossips
     GOSSIP_BREWFEST                 = 8988,
     GOSSIP_MIDSUMMER                = 9148,
     GOSSIP_SPIRIT_OF_COMPETITION    = 9522,
-    GOSSIP_PIRATES_DAY              = 0,
+    GOSSIP_PIRATES_DAY              = 9637,
     GOSSIP_DARK_PORTAL              = 0,
 };
 
@@ -2817,6 +2830,19 @@ bool GossipHello_npc_gossip_npc(Player* player, Creature* creature)
     if (ai)
     {
         GossipNPCEvents gossipEvent = ai->m_chosenEvent;
+        
+        // Dynamically resolve event if the NPC was already spawned when the event started
+        if (gossipEvent == GOSSIP_EVENT_DARK_PORTAL)
+        {
+            if (sGameEventMgr.IsActiveHoliday(HOLIDAY_FEAST_OF_WINTER_VEIL)) gossipEvent = GOSSIP_EVENT_WINTER_VEIL;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_LUNAR_FESTIVAL)) gossipEvent = GOSSIP_EVENT_LUNAR_FESTIVAL;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_HALLOWS_END)) gossipEvent = GOSSIP_EVENT_HALLOWS_END;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_BREWFEST)) gossipEvent = GOSSIP_EVENT_BREWFEST;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_PIRATES_DAY)) gossipEvent = GOSSIP_EVENT_PIRATES_DAY;
+            else if (sGameEventMgr.IsActiveHoliday(HOLIDAY_FIRE_FESTIVAL)) gossipEvent = GOSSIP_EVENT_MIDSUMMER;
+            else if (sGameEventMgr.IsActiveEvent(GAME_EVENT_SPIRIT_OF_COMPETITION)) gossipEvent = GOSSIP_EVENT_SPIRIT_OF_COMPETITION;
+        }
+
         Team team = ai->m_team;
         switch (gossipEvent)
         {

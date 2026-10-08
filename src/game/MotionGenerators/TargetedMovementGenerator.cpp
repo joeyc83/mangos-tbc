@@ -236,14 +236,52 @@ void ChaseMovementGenerator::HandleTargetedMovement(Unit& owner, const uint32& t
         }
         else m_closenessAndFanningTimer -= time_diff;
     }
-    if (!this->i_recheckDistance.Passed())
-        return;
 
-    this->i_recheckDistance.Reset(250);
     auto vectorDest = owner.movespline->FinalDestination();
     Position dest(vectorDest.x, vectorDest.y, vectorDest.z, 0.f);
     if (dest.x == 0 && dest.y == 0 && dest.z == 0)
         owner.GetPosition(dest.x, dest.y, dest.z, owner.GetTransport());
+
+    // Check collision / crossing every tick (not just every 250ms)
+    if (!this->i_targetReached)
+    {
+        if (!owner.movespline->Finalized() && m_currentMode == CHASE_MODE_NORMAL)
+        {
+            // TODO: This code would benefit greatly if "Get Target Position in 250 ms" function existed
+            if (currentTargetPos != this->i_lastTargetPos)
+            {
+                Position ownerPos;
+                owner.GetPosition(ownerPos.x, ownerPos.y, ownerPos.z, owner.GetTransport());
+                float distFromDestination = owner.GetDistance(dest.x, dest.y, dest.z, DIST_CALC_NONE, owner.GetTransport());
+                float distOwnerFromTarget = this->i_target->GetDistance(ownerPos.x, ownerPos.y, ownerPos.z, DIST_CALC_NONE, owner.GetTransport());
+                // Explanation of magic: comparing distances between target and destination makes it so we know when mob is between destination and owner
+                // - thats when forcible spline stop is needed
+                float targetDist = this->i_target->GetCombinedCombatReach(&owner, this->i_offset == 0.f ? true : false);
+                if (distFromDestination > distOwnerFromTarget)
+                {
+                    if (this->i_target->GetDistance(ownerPos.x, ownerPos.y, ownerPos.z, DIST_CALC_NONE, owner.GetTransport()) < targetDist * targetDist)
+                    {
+                        if (owner.IsClientControlled())
+                            owner.StopMoving(true);
+                        else
+                            owner.InterruptMoving();
+
+                        // Update dest since we interrupted moving
+                        vectorDest = owner.movespline->FinalDestination();
+                        dest.x = vectorDest.x; dest.y = vectorDest.y; dest.z = vectorDest.z;
+                        if (dest.x == 0 && dest.y == 0 && dest.z == 0)
+                            owner.GetPosition(dest.x, dest.y, dest.z, owner.GetTransport());
+                    }
+                }
+            }
+        }
+    }
+
+    if (!this->i_recheckDistance.Passed())
+        return;
+
+    this->i_recheckDistance.Reset(250);
+    
     if (m_currentMode != CHASE_MODE_DISTANCING)
     {
         targetMoved = this->RequiresNewPosition(owner, dest); // uses transport coordinates
@@ -301,37 +339,7 @@ void ChaseMovementGenerator::HandleTargetedMovement(Unit& owner, const uint32& t
         }
     }
 
-    // while spline is engaged we have two cases: Running to target or distancing when target was standing in model
-    if (!this->i_targetReached)
-    {
-        if (owner.movespline->Finalized())
-            return;
-        else if (m_currentMode == CHASE_MODE_NORMAL)
-        {
-            // TODO: This code would benefit greatly if "Get Target Position in 250 ms" function existed
-            if (currentTargetPos != this->i_lastTargetPos)
-            {
-                Position ownerPos;
-                owner.GetPosition(ownerPos.x, ownerPos.y, ownerPos.z, owner.GetTransport());
-                float distFromDestination = owner.GetDistance(dest.x, dest.y, dest.z, DIST_CALC_NONE, owner.GetTransport());
-                float distOwnerFromTarget = this->i_target->GetDistance(ownerPos.x, ownerPos.y, ownerPos.z, DIST_CALC_NONE, owner.GetTransport());
-                // Explanation of magic: comparing distances between target and destination makes it so we know when mob is between destination and owner
-                // - thats when forcible spline stop is needed
-                float targetDist = this->i_target->GetCombinedCombatReach(&owner, this->i_offset == 0.f ? true : false);
-                if (distFromDestination > distOwnerFromTarget)
-                {
-                    if (this->i_target->GetDistance(ownerPos.x, ownerPos.y, ownerPos.z, DIST_CALC_NONE, owner.GetTransport()) < targetDist * targetDist)
-                    {
-                        if (owner.IsClientControlled())
-                            owner.StopMoving(true);
-                        else
-                            owner.InterruptMoving();
-                    }
-                }
-            }
-        }
-    }
-    else
+    if (this->i_targetReached)
     {
         // When creatures use backpedaling, they are caught in an endless cycle of it, its not critical, since they arrive at each other with precision anyhow
         if (this->i_target->GetTypeId() != TYPEID_PLAYER)

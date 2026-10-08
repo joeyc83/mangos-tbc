@@ -171,7 +171,7 @@ void CreatureAI::RetreatingEnded()
     DoStartMovement(m_creature->GetVictim());
 }
 
-bool CreatureAI::DoRetreat()
+bool CreatureAI::DoRetreat(uint32 forcedMovement)
 {
     Unit* victim = m_creature->GetVictim();
     if (!victim)
@@ -195,7 +195,7 @@ bool CreatureAI::DoRetreat()
 
     Position pos;
     ally->GetFirstCollisionPosition(pos, ally->GetCombatReach(), ally->GetAngle(m_creature));
-    m_creature->GetMotionMaster()->MoveRetreat(pos.x, pos.y, pos.z, ally->GetAngle(victim), delay);
+    m_creature->GetMotionMaster()->MoveRetreat(pos.x, pos.y, pos.z, ally->GetAngle(victim), delay, (ForcedMovement)forcedMovement);
 
     SetAIOrder(ORDER_RETREATING);
     SetCombatScriptStatus(true);

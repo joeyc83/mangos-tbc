@@ -263,10 +263,10 @@ void WorldSession::HandleMoveWorldportAckOpcode()
         if (player->GetGroup())
             player->SetGroupUpdateFlag(GROUP_UPDATE_FULL);
     };
-    if (found)
-        lambda(map);
-    else
-        map->GetMessager().AddMessage(lambda);
+
+    // ALWAYS defer teleport finalization to the Map Thread to prevent grid corruption 
+    // from the World Thread and ensure safe lifecycle handling.
+    map->GetMessager().AddMessage(lambda);
 }
 
 void WorldSession::HandleMoveTeleportAckOpcode(WorldPacket& recv_data)
@@ -399,7 +399,7 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
     WorldPacket data(opcode, recv_data.size());
     data << mover->GetPackGUID();                           // write guid
     movementInfo.Write(data);                               // write data
-    mover->SendMessageToAllWhoSeeMeMove(data, _player->GetObjectGuid());
+    mover->SendMessageToAllWhoSeeMe(data, _player->GetObjectGuid());
 }
 
 void WorldSession::HandleForceSpeedChangeAckOpcodes(WorldPacket& recv_data)
@@ -458,7 +458,7 @@ void WorldSession::HandleForceSpeedChangeAckOpcodes(WorldPacket& recv_data)
     data << guid.WriteAsPacked();
     data << movementInfo;
     data << newspeed;
-    mover->SendMessageToAllWhoSeeMeMove(data, _player->GetObjectGuid());
+    mover->SendMessageToAllWhoSeeMe(data, _player->GetObjectGuid());
 
     // skip all forced speed changes except last and unexpected
     // in run/mounted case used one ACK and it must be skipped.m_forced_speed_changes[MOVE_RUN} store both.
@@ -573,7 +573,7 @@ void WorldSession::HandleMoveKnockBackAck(WorldPacket& recv_data)
     data << movementInfo.jump.sinAngle;
     data << movementInfo.jump.xyspeed;
     data << movementInfo.jump.zspeed;
-    mover->SendMessageToAllWhoSeeMeMove(data, _player->GetObjectGuid());
+    mover->SendMessageToAllWhoSeeMe(data, _player->GetObjectGuid());
 }
 
 void WorldSession::SendKnockBack(Unit* who, float angle, float horizontalSpeed, float verticalSpeed)
@@ -643,7 +643,7 @@ void WorldSession::HandleMoveFlagChangeOpcode(WorldPacket& recv_data)
     WorldPacket data(response, 8);
     data << guid.WriteAsPacked();
     data << movementInfo;
-    mover->SendMessageToAllWhoSeeMeMove(data, _player->GetObjectGuid());
+    mover->SendMessageToAllWhoSeeMe(data, _player->GetObjectGuid());
 }
 
 void WorldSession::HandleMoveRootAck(WorldPacket& recv_data)
@@ -682,7 +682,7 @@ void WorldSession::HandleMoveRootAck(WorldPacket& recv_data)
     WorldPacket data(opcode == CMSG_FORCE_MOVE_UNROOT_ACK ? MSG_MOVE_UNROOT : MSG_MOVE_ROOT);
     data << guid.WriteAsPacked();
     data << movementInfo;
-    mover->SendMessageToAllWhoSeeMeMove(data, _player->GetObjectGuid());
+    mover->SendMessageToAllWhoSeeMe(data, _player->GetObjectGuid());
 }
 
 void WorldSession::HandleSummonResponseOpcode(WorldPacket& recv_data)

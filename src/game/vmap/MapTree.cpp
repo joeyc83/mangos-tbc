@@ -212,6 +212,13 @@ namespace VMAP
     float StaticMapTree::getHeight(const Vector3& pPos, float maxSearchDist) const
     {
         float height = G3D::inf();
+        // Guard: NaN position or NaN/zero maxSearchDist would cause BIH::intersectRay
+        // to loop infinitely (NaN comparisons always false), overflowing the fixed
+        // traversal stack and crashing with SIGSEGV.  Unlike isInLineOfSight() and
+        // getObjectHitPos(), this function has no MANGOS_ASSERT, so the check must
+        // live here.
+        if (!pPos.isFinite() || std::isnan(maxSearchDist))
+            return height;
         Vector3 dir;
         if (maxSearchDist >= 0.f)
             dir = Vector3(0, 0, -1);

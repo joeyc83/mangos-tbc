@@ -502,36 +502,7 @@ struct SoulSiphon : public AuraScript
     }
 };
 
-// 37384 - Improved Corruption and Immolate
-struct ImprovedCorruptionAndImmolate : public AuraScript
-{
-    SpellAuraProcResult OnProc(Aura* /*aura*/, ProcExecutionData& procData) const override
-    {
-        if (procData.spell)
-        {
-            procData.triggerTarget = procData.victim;
-            if (procData.spellInfo->SchoolMask & SPELL_SCHOOL_MASK_SHADOW)
-                procData.triggeredSpellId = 37401; // corruption
-            else
-                procData.triggeredSpellId = 37402; // immolate
-        }
-        return SPELL_AURA_PROC_OK;
-    }
-};
 
-// 37401, 37402 - Improved Corruption and Immolate
-struct IncreasedSpellDamageTakenWarlock : public AuraScript
-{
-    void OnApply(Aura* aura, bool apply) const override
-    {
-        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_TAKEN, apply);
-    }
-
-    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* /*victim*/, int32& /*advertisedBenefit*/, float& totalMod) const override
-    {
-        totalMod *= (100.0f + aura->GetModifier()->m_amount) / 100.0f;
-    }
-};
 
 void LoadWarlockScripts()
 {
@@ -554,6 +525,4 @@ void LoadWarlockScripts()
     RegisterSpellScript<DemonicSacrifice>("spell_demonic_sacrifice");
     RegisterSpellScript<CurseDiminishingDuration>("spell_curse_diminishing_duration");
     RegisterSpellScript<SoulSiphon>("spell_soul_siphon");
-    RegisterSpellScript<ImprovedCorruptionAndImmolate>("spell_improved_corruption_and_immolate");
-    RegisterSpellScript<IncreasedSpellDamageTakenWarlock>("spell_increased_spell_damage_taken_dummy");
 }

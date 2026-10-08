@@ -3641,7 +3641,7 @@ void Spell::_handle_immediate_phase()
                     break;
                 case SPELL_MISS_BLOCK:
                     hitInfo = hitInfo | HITINFO_BLOCK;
-                    dmgInfo.TargetState = VICTIMSTATE_UNAFFECTED;
+                    dmgInfo.TargetState = VICTIMSTATE_BLOCKS;
                     break;
                     // spell has no glancing or crushing
             }

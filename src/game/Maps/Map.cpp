@@ -2084,7 +2084,8 @@ bool DungeonMap::Add(Player* player)
                           GetPersistanceState()->GetMapId(), GetPersistanceState()->GetInstanceId(),
                           GetPersistanceState()->GetDifficulty(), GetPersistanceState()->GetPlayerCount(),
                           GetPersistanceState()->GetGroupCount(), GetPersistanceState()->CanReset());
-            MANGOS_ASSERT(false);
+            // No reason to crash the server — return false so the caller can redirect the player.
+            return false;
         }
     }
     else
@@ -2134,7 +2135,24 @@ bool DungeonMap::Add(Player* player)
                         sLog.outError("GroupBind save players: %d, group count: %d", groupBind->state->GetPlayerCount(), groupBind->state->GetGroupCount());
                     else
                         sLog.outError("GroupBind save nullptr");
-                    MANGOS_ASSERT(false);
+                // no reason to crash if we can fix state -- same philosophy as line 2112 above.
+                    // This occurs when an instance expires/resets while a group bind to it is still
+                    // in memory (most commonly with AI bots that teleport after long downtime).
+                    // If the old bound instance is empty it is safe to rebind to this one.
+                    if (groupBind->state && groupBind->state->GetPlayerCount() == 0)
+                    {
+                        sLog.outError("DungeonMap::Add: Resetting stale group bind for group %d (old instance %d is empty), rebinding to instance %d.",
+                                      pGroup->GetId(), groupBind->state->GetInstanceId(), GetInstanceId());
+                        pGroup->UnbindInstance(GetId(), GetDifficulty());
+                        pGroup->BindToInstance(GetPersistanceState(), false);
+                    }
+                    else
+                    {
+                        // Old instance still has players — genuinely conflicting, refuse add safely.
+                        sLog.outError("DungeonMap::Add: Refusing to add %s — group %d is still actively bound to a different instance. Player will be redirected.",
+                                      player->GetGuidStr().c_str(), pGroup->GetId());
+                        return false;
+                    }
                 }
                 // if the group/leader is permanently bound to the instance
                 // players also become permanently bound when they enter
@@ -2153,8 +2171,14 @@ bool DungeonMap::Add(Player* player)
             if (!playerBind)
                 player->BindToInstance(GetPersistanceState(), false);
             else
-                // cannot jump to a different instance without resetting it
-                MANGOS_ASSERT(playerBind->state == GetPersistentState());
+            {
+                // No reason to crash — same fix as the group case above.
+                // Unbind from the stale solo instance and let the player enter fresh.
+                sLog.outError("DungeonMap::Add: Solo player %s has stale bind to instance %d, resetting to allow entry to instance %d.",
+                              player->GetGuidStr().c_str(), playerBind->state->GetInstanceId(), GetInstanceId());
+                player->UnbindInstance(GetId(), GetDifficulty());
+                player->BindToInstance(GetPersistanceState(), false);
+            }
         }
     }
 

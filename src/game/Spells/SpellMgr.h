@@ -1912,15 +1912,43 @@ inline bool IsSimilarExistingAuraStronger(const SpellAuraHolder* holder, const S
                 effectmask2 |= (1 << e2);
                 Aura* aura1 = holder->GetAuraByEffectIndex(SpellEffectIndex(e));
                 Aura* aura2 = existing->GetAuraByEffectIndex(SpellEffectIndex(e2));
-                int32 value = aura1 ? (aura1->GetModifier()->m_amount / int32(aura1->GetStackAmount())) : 0;
-                int32 value2 = aura2 ? (aura2->GetModifier()->m_amount / int32(aura2->GetStackAmount())) : 0;
-                if (value < 0 && value2 < 0)
+                
+                bool sameSpellFamily = (entry->Id == entry2->Id) ||
+                                       (entry->SpellFamilyName && entry->SpellFamilyName == entry2->SpellFamilyName &&
+                                        entry->SpellFamilyFlags == entry2->SpellFamilyFlags);
+
+                int32 value = aura1 ? aura1->GetModifier()->m_amount : 0;
+                int32 value2 = aura2 ? aura2->GetModifier()->m_amount : 0;
+
+                if (sameSpellFamily)
                 {
-                    value = abs(value);
-                    value2 = abs(value2);
+                    if (aura1) value /= int32(aura1->GetStackAmount());
+                    if (aura2) value2 /= int32(aura2->GetStackAmount());
                 }
+
+                value = abs(value);
+                value2 = abs(value2);
+                
                 if (value2 > value)
                     return true;
+                
+                if (value2 == value && !sameSpellFamily)
+                {
+                    int32 existDur = existing->GetAuraDuration();
+                    int32 newDur = holder->GetAuraDuration();
+                    if (existDur != -1)
+                    {
+                        if (newDur == -1)
+                            ; // new is permanent, existing is not -> new wins
+                        else if (existDur > newDur)
+                            return true;
+                    }
+                    else
+                    {
+                        if (newDur != -1)
+                            return true; // existing is permanent, new is not -> existing wins
+                    }
+                }
             }
         }
     }
@@ -1949,16 +1977,42 @@ inline bool IsSimilarExistingAuraStronger(const Unit* caster, const SpellEntry* 
                 {
                     effectmask1 |= (1 << e);
                     effectmask2 |= (1 << e2);
+                    
                     Aura* aura = existing->GetAuraByEffectIndex(SpellEffectIndex(e2));
+                    
+                    bool sameSpellFamily = (entry->Id == entry2->Id) ||
+                                           (entry->SpellFamilyName && entry->SpellFamilyName == entry2->SpellFamilyName &&
+                                            entry->SpellFamilyFlags == entry2->SpellFamilyFlags);
+
                     int32 value = amounts[e];
-                    int32 value2 = aura ? (aura->GetModifier()->m_amount / int32(aura->GetStackAmount())) : 0;
-                    if (value < 0 && value2 < 0)
+                    int32 value2 = aura ? aura->GetModifier()->m_amount : 0;
+                    
+                    if (sameSpellFamily)
                     {
-                        value = abs(value);
-                        value2 = abs(value2);
+                        if (aura) value2 /= int32(aura->GetStackAmount());
                     }
+
+                    value = abs(value);
+                    value2 = abs(value2);
                     if (value2 > value)
                         return true;
+                    if (value2 == value && !sameSpellFamily)
+                    {
+                        int32 existDur = existing->GetAuraDuration();
+                        int32 newDur = GetSpellDuration(entry);
+                        if (existDur != -1)
+                        {
+                            if (newDur == -1)
+                                ; // new is permanent, existing is not -> new wins
+                            else if (existDur > newDur)
+                                return true;
+                        }
+                        else
+                        {
+                            if (newDur != -1)
+                                return true; // existing is permanent, new is not -> existing wins
+                        }
+                    }
                 }
             }
         }

@@ -125,6 +125,10 @@ class BIH
             float intervalMax = -1.f;
             Vector3 org = r.origin();
             Vector3 dir = r.direction();
+            if (!org.isFinite() || !dir.isFinite()) return;
+            // maxDist NaN causes all BVH comparisons to evaluate false, pushing
+            // every node as "both children" until the fixed stack[64] overflows.
+            if (std::isnan(maxDist) || maxDist < 0.f) return;
             Vector3 invDir;
             for (int i = 0; i < 3; ++i)
             {
@@ -208,6 +212,8 @@ class BIH
                             }
                             // ray passes through both nodes
                             // push back node
+                            if (stackPos >= MAX_STACK_SIZE)
+                                break;
                             stack[stackPos].node = back;
                             stack[stackPos].tnear = (tb >= intervalMin) ? tb : intervalMin;
                             stack[stackPos].tfar = intervalMax;
@@ -262,6 +268,7 @@ class BIH
         template<typename IsectCallback>
         void intersectPoint(const Vector3& p, IsectCallback& intersectCallback) const
         {
+            if (!p.isFinite()) return;
             if (!bounds.contains(p))
                 return;
 
@@ -302,6 +309,8 @@ class BIH
                             }
                             // point is in both nodes
                             // push back right node
+                            if (stackPos >= MAX_STACK_SIZE)
+                                break;
                             stack[stackPos].node = right;
                             ++stackPos;
                         }

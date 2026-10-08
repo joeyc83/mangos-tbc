@@ -2924,22 +2924,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
         case SPELLFAMILY_ROGUE:
             break;
         case SPELLFAMILY_PALADIN:
-        {
-            switch (GetId())
-            {
-                case 21082:                                 // Seal of the Crusader, rank 1
-                case 20162:                                 // rank 2
-                case 20305:                                 // rank 3
-                case 20306:                                 // rank 4
-                case 20307:                                 // rank 5
-                case 20308:                                 // rank 6
-                case 27158:                                 // rank 7
-                    ApplyPercentModFloatVar(target->m_modAttackBaseDPSPct[BASE_ATTACK], 40, !apply);
-                    target->UpdateDamagePhysical(BASE_ATTACK);
-                    return;
-            }
             break;
-        }
         case SPELLFAMILY_PRIEST:
         {
             switch (GetId())
@@ -4095,8 +4080,15 @@ void Aura::HandleAuraModStun(bool apply, bool Real)
 void Aura::HandleModStealth(bool apply, bool Real)
 {
     Unit* target = GetTarget();
+    
+    int32 amount = m_modifier.m_amount;
+    uint32 spellLevel = GetSpellProto()->spellLevel;
+    if (spellLevel == 0) spellLevel = 1;
+    if (target->GetLevel() > spellLevel)
+        amount += int32(target->GetLevel() - spellLevel) * 5;
+
     // TODO: add mask
-    target->GetVisibilityData().AddStealthStrength(StealthType(m_modifier.m_miscvalue), apply ? m_modifier.m_amount : -m_modifier.m_amount);
+    target->GetVisibilityData().AddStealthStrength(StealthType(m_modifier.m_miscvalue), apply ? amount : -amount);
 
     if (apply)
     {
@@ -8141,7 +8133,7 @@ bool SpellAuraHolder::IsNeedVisibleSlot(Unit const* caster) const
     return !m_isPassive || totemAura;
 }
 
-void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
+void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply, AuraRemoveMode mode)
 {
     std::vector<uint32> boostSpells;
 
@@ -8164,11 +8156,6 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         }
         case SPELLFAMILY_MAGE:
         {
-            //switch (GetId())
-            //{
-            //    default:
-            //        break; // Break here for poly below - 2.4.2+ only player poly regens
-            //}
             break;
         }
         case SPELLFAMILY_WARRIOR:
@@ -8177,6 +8164,9 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
             {
                 // Remove Blood Frenzy only if target no longer has any Deep Wound or Rend (applying is handled by procs)
                 if (GetSpellProto()->Mechanic != MECHANIC_BLEED)
+                    return;
+
+                if (mode == AURA_REMOVE_BY_STACK)
                     return;
 
                 // If target still has one of Warrior's bleeds, do nothing
@@ -8229,7 +8219,11 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
     }
 
     if (GetSpellProto()->Mechanic == MECHANIC_POLYMORPH)
-        boostSpells.push_back(12939); // Just so that this doesnt conflict with others
+    {
+        // 2.4.2+ Polymorph no longer heals NPCs
+        if (m_target->GetTypeId() == TYPEID_PLAYER)
+            boostSpells.push_back(12939); // Just so that this doesnt conflict with others
+    }
 
     if (boostSpells.empty())
         return;
@@ -8779,6 +8773,13 @@ void SpellAuraHolder::OnDispel(Unit* dispeller, uint32 dispellingSpellId, uint32
 
 uint32 Aura::CalculateAuraEffectValue(Unit* caster, Unit* /*target*/, SpellEntry const* spellProto, SpellEffectIndex effIdx, uint32 value)
 {
+    // Blood Fury (Attack Power scaling fix for level 70)
+    if (effIdx == EFFECT_INDEX_0 && (spellProto->Id == 20572 || spellProto->Id == 33697))
+    {
+        if (caster && caster->GetLevel() == 70)
+            return 282;
+    }
+
     switch (spellProto->EffectApplyAuraName[effIdx])
     {
         case SPELL_AURA_SCHOOL_ABSORB:

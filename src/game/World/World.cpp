@@ -228,7 +228,7 @@ World::AddSession_(WorldSession* s)
     ///- if player is in loading and want to load again, return
     if (!RemoveSession(s->GetAccountId()))
     {
-        s->KickPlayer();
+        s->KickPlayer(false);
         delete s;                                           // session not added yet in session list, so not listed in queue
         return;
     }

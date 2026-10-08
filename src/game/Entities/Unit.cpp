@@ -2182,14 +2182,13 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
         case MELEE_HIT_BLOCK:
         {
             calcDamageInfo->HitInfo |= HITINFO_BLOCK;
-            calcDamageInfo->TargetState = VICTIMSTATE_NORMAL;
+            calcDamageInfo->TargetState = VICTIMSTATE_BLOCKS;
             calcDamageInfo->procEx |= PROC_EX_BLOCK;
             calcDamageInfo->blockedAmount = calcDamageInfo->target->GetShieldBlockValue();
 
             if (calcDamageInfo->blockedAmount >= calcDamageInfo->totalDamage)
             {
                 // Full block
-                calcDamageInfo->TargetState = VICTIMSTATE_BLOCKS;
                 calcDamageInfo->blockedAmount = calcDamageInfo->totalDamage;
 
                 for (uint8 i = 0; i < m_weaponDamageInfo.weapon[calcDamageInfo->attackType].lines; i++)
@@ -2751,6 +2750,7 @@ void Unit::CalculateAbsorbResistBlock(Unit* caster, SpellNonMeleeDamage* spellDa
     {
         spellDamageInfo->blocked = std::min(GetShieldBlockValue(), spellDamageInfo->damage);
         spellDamageInfo->damage -= spellDamageInfo->blocked;
+        spellDamageInfo->HitInfo |= HITINFO_BLOCK;
     }
 
     CalculateDamageAbsorbAndResist(caster, spellDamageInfo->schoolMask, SPELL_DIRECT_DAMAGE, spellDamageInfo->damage, &spellDamageInfo->absorb, &spellDamageInfo->resist, IsReflectableSpell(spellProto), IsResistableSpell(spellProto) && !spellProto->HasAttribute(SPELL_ATTR_EX5_NO_PARTIAL_RESISTS), IsBinarySpell(*spellProto));
@@ -5732,7 +5732,7 @@ void Unit::RemoveSpellAuraHolder(SpellAuraHolder* holder, AuraRemoveMode mode)
     holder->_RemoveSpellAuraHolder();
 
     if (mode != AURA_REMOVE_BY_DELETE)
-        holder->HandleSpellSpecificBoosts(false);
+        holder->HandleSpellSpecificBoosts(false, mode);
 
     if (statue)
         statue->UnSummon();
@@ -6265,6 +6265,9 @@ void Unit::SendSpellNonMeleeDamageLog(SpellNonMeleeDamage* log)
     data << uint8(log->periodicLog);                        // if 1, then client show spell name (example: %s's ranged shot hit %s for %u school or %s suffers %u school damage from %s's spell_name
     data << uint8(log->unused);                             // unused
     data << uint32(log->blocked);                           // blocked
+    if (log->blocked)
+        log->HitInfo |= HITINFO_BLOCK;
+
     data << uint32(log->HitInfo);
 
     // Debug mode bool switch (extended data):
@@ -6315,6 +6318,8 @@ void Unit::SendSpellNonMeleeDamageLog(WorldObject* attacker, Unit* target, uint3
         log.HitInfo |= SPELL_HIT_TYPE_CRIT;
     if (split)
         log.HitInfo |= SPELL_HIT_TYPE_SPLIT;
+    if (blocked)
+        log.HitInfo |= HITINFO_BLOCK;
     SendSpellNonMeleeDamageLog(&log);
 }
 
@@ -7515,7 +7520,12 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
 
     // Creature damage
     if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
-        DoneTotalMod *= Creature::_GetSpellDamageMod(((Creature*)this)->GetCreatureInfo()->Rank);
+    {
+        int32 rank = ((Creature*)this)->GetCreatureInfo()->Rank;
+        if (HasCharmer() && GetCharmer()->IsPlayer() && rank > CREATURE_ELITE_NORMAL)
+            rank = CREATURE_ELITE_NORMAL;
+        DoneTotalMod *= Creature::_GetSpellDamageMod(rank);
+    }
 
     Item* const weapon = GetTypeId() == TYPEID_PLAYER ? ((Player*)this)->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND) : nullptr;
 
@@ -8218,6 +8228,25 @@ bool Unit::Mount(uint32 displayid, const Aura* aura/* = nullptr*/)
         return false;
 
     RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_MOUNTING);
+
+    // Cancel cosmetic transformations that do not support mounting
+    AuraList transforms = GetAurasByType(SPELL_AURA_TRANSFORM);
+    for (Aura* aura : transforms)
+    {
+        bool canMount = false;
+        if (CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(aura->GetModifier()->m_amount))
+        {
+            if (CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId))
+            {
+                if (modelData->Flags & 0x80) // 0x80 = CREATURE_MODEL_FLAG_CAN_MOUNT
+                    canMount = true;
+            }
+        }
+
+        if (!canMount)
+            RemoveAura(aura);
+    }
+
     if (!m_isMountOverriden)
         SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, displayid);
     else
@@ -11796,24 +11825,6 @@ Unit* Unit::TakePossessOf(SpellEntry const* spellEntry, SummonPropertiesEntry co
     return possessed;
 }
 
-void Unit::SendMessageToAllWhoSeeMeMove(WorldPacket const& data, ObjectGuid moverOwner) const
-{
-    if (IsInWorld())
-    {
-        GuidSet const& clientGuidsIAmAt = GetClientGuidsIAmAt();
-        for (ObjectGuid guid : clientGuidsIAmAt)
-        {
-            if (moverOwner == guid)
-                continue;
-            if (Player* player = GetMap()->GetPlayer(guid))
-                player->GetSession()->SendPacket(data);
-        }
-
-        if (IsPlayer() && moverOwner != GetObjectGuid())
-            static_cast<Player const*>(this)->GetSession()->SendPacket(data);
-    }
-}
-
 bool Unit::TakePossessOf(Unit* possessed)
 {
     // Possess is a unique advertised charm, another advertised charm already exists: we should get rid of it first
@@ -12008,6 +12019,14 @@ bool Unit::TakeCharmOf(Unit* charmed, uint32 spellId, bool advertised /*= true*/
         if (uint32 charmedSpellList = charmedCreature->GetCreatureInfo()->CharmedSpellList)
             charmedCreature->SetSpellList(charmedSpellList);
 
+        if (charmerPlayer && charmedCreature->GetCreatureInfo()->Rank > CREATURE_ELITE_NORMAL)
+        {
+            charmedCreature->UpdateMaxHealth();
+            charmedCreature->UpdateDamagePhysical(BASE_ATTACK);
+            charmedCreature->UpdateDamagePhysical(OFF_ATTACK);
+            charmedCreature->UpdateDamagePhysical(RANGED_ATTACK);
+        }
+
         charmInfo->InitCharmCreateSpells();
         if (changeAI)
         {
@@ -12192,8 +12211,17 @@ void Unit::Uncharm(Unit* charmed, uint32 /*spellId*/)
 
     if (charmed->IsCreature())
     {
-        // now we have to clean threat list to be able to restore normal creature behavior
         Creature* charmedCreature = static_cast<Creature*>(charmed);
+
+        if (player && charmedCreature->GetCreatureInfo()->Rank > CREATURE_ELITE_NORMAL)
+        {
+            charmedCreature->UpdateMaxHealth();
+            charmedCreature->UpdateDamagePhysical(BASE_ATTACK);
+            charmedCreature->UpdateDamagePhysical(OFF_ATTACK);
+            charmedCreature->UpdateDamagePhysical(RANGED_ATTACK);
+        }
+
+        // now we have to clean threat list to be able to restore normal creature behavior
         if (!charmedCreature->IsPet())
         {
             charmedCreature->ClearTemporaryFaction();

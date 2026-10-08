@@ -2504,7 +2504,7 @@ class Unit : public WorldObject
         uint8 GetComboPoints() const { return m_comboPoints; }
         ObjectGuid const& GetComboTargetGuid() const { return m_comboTargetGuid; }
 
-        void AddComboPoints(Unit* target, int8 count);
+        void AddComboPoints(Unit* target, int8 count, SpellEntry const* spellInfo = nullptr);
         void ClearComboPoints();
 
         void RegisterScalingAura(Aura* aura, bool apply);

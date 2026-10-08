@@ -12651,13 +12651,27 @@ std::vector<Aura*> const& Unit::GetScriptedLocationAuras(AuraScriptLocation loca
     return m_scriptedLocations[location];
 }
 
-void Unit::AddComboPoints(Unit* target, int8 count)
+void Unit::AddComboPoints(Unit* target, int8 count, SpellEntry const* spellInfo)
 {
     if (!count)
         return;
 
     // without combo points lost (duration checked in aura)
-    RemoveSpellsCausingAura(SPELL_AURA_RETAIN_COMBO_POINTS);
+    bool removeRetainAura = true;
+    if (spellInfo)
+    {
+        for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        {
+            if (spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA && spellInfo->EffectApplyAuraName[i] == SPELL_AURA_RETAIN_COMBO_POINTS)
+            {
+                removeRetainAura = false;
+                break;
+            }
+        }
+    }
+
+    if (removeRetainAura)
+        RemoveSpellsCausingAura(SPELL_AURA_RETAIN_COMBO_POINTS);
 
     if (target->GetObjectGuid() == m_comboTargetGuid)
     {

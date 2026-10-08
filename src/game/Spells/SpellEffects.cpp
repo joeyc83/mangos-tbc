@@ -6641,7 +6641,7 @@ void Spell::EffectAddComboPoints(SpellEffectIndex /*eff_idx*/)
     if (damage <= 0)
         return;
 
-    m_caster->AddComboPoints(unitTarget, damage);
+    m_caster->AddComboPoints(unitTarget, damage, m_spellInfo);
 }
 
 void Spell::EffectDuel(SpellEffectIndex eff_idx)

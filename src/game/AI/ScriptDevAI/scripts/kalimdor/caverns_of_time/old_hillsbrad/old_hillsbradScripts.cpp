@@ -1036,36 +1036,40 @@ UnitAI* GetAI_npc_thrall_old_hillsbrad(Creature* pCreature)
 bool GossipHello_npc_thrall_old_hillsbrad(Player* pPlayer, Creature* pCreature)
 {
     if (pCreature->isQuestGiver())
-    {
         pPlayer->PrepareQuestMenu(pCreature->GetObjectGuid());
-        pPlayer->SendPreparedQuest(pCreature->GetObjectGuid());
-    }
 
     if (instance_old_hillsbrad* pInstance = (instance_old_hillsbrad*)pCreature->GetInstanceData())
     {
         // If the inn escort has started, skip the gossip
         if (pInstance->GetData(TYPE_ESCORT_INN) == DONE)
+        {
             pPlayer->SEND_GOSSIP_MENU(TEXT_ID_INN, pCreature->GetObjectGuid());
+            return true;
+        }
         // Escort - barn to inn
         else if (pInstance->GetData(TYPE_ESCORT_BARN) == DONE)
         {
             pPlayer->ADD_GOSSIP_ITEM_ID(GOSSIP_ICON_CHAT, GOSSIP_ITEM_TARREN_1, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 3);
             pPlayer->SEND_GOSSIP_MENU(TEXT_ID_TARREN, pCreature->GetObjectGuid());
+            return true;
         }
         // Escort - after Skarloc is defeated
         else if (pInstance->GetData(TYPE_SKARLOC) == DONE)
         {
             pPlayer->ADD_GOSSIP_ITEM_ID(GOSSIP_ICON_CHAT, GOSSIP_ITEM_SKARLOC_1, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 2);
             pPlayer->SEND_GOSSIP_MENU(TEXT_ID_SKARLOC_1, pCreature->GetObjectGuid());
+            return true;
         }
         // Event start - after Drake is defeated
         else if (pInstance->GetData(TYPE_DRAKE) == DONE)
         {
             pPlayer->ADD_GOSSIP_ITEM_ID(GOSSIP_ICON_CHAT, GOSSIP_ITEM_START, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
             pPlayer->SEND_GOSSIP_MENU(TEXT_ID_START, pCreature->GetObjectGuid());
+            return true;
         }
     }
-    return true;
+
+    return false;
 }
 
 bool GossipSelect_npc_thrall_old_hillsbrad(Player* pPlayer, Creature* pCreature, uint32 /*uiSender*/, uint32 uiAction)

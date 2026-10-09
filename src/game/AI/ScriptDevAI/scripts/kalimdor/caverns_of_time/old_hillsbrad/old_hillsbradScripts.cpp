@@ -393,7 +393,7 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             }
             else if (m_pInstance->GetData(TYPE_ESCORT_BARN) != DONE)
             {
-                SetCurrentWaypoint(38);                     // keep
+                SetCurrentWaypoint(39);                     // keep
 
                 m_creature->SetDisplayId(MODEL_THRALL_EQUIPPED);
                 SetEquipmentSlots(false, EQUIP_ID_WEAPON, EQUIP_ID_SHIELD, EQUIP_NO_CHANGE);
@@ -404,7 +404,7 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             }
             else if (m_pInstance->GetData(TYPE_ESCORT_INN) != DONE)
             {
-                SetCurrentWaypoint(69);                     // barn
+                SetCurrentWaypoint(70);                     // barn
                 m_lTarrenMillSoldiersGuids.clear();
 
                 m_creature->SetDisplayId(MODEL_THRALL_EQUIPPED);
@@ -413,7 +413,7 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             }
             else if (m_pInstance->GetData(TYPE_EPOCH) != DONE)
             {
-                SetCurrentWaypoint(113);                    // inn
+                SetCurrentWaypoint(114);                    // inn
                 m_creature->SetDisplayId(MODEL_THRALL_EQUIPPED);
                 SetEquipmentSlots(false, EQUIP_ID_WEAPON, EQUIP_ID_SHIELD, EQUIP_NO_CHANGE);
                 m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
@@ -856,12 +856,18 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
                 SetRun(false);
                 break;
             case 78:
+            {
                 m_creature->SetFacingTo(4.9f);
-                m_creature->SummonCreature(NPC_BARN_PROTECTOR, 2500.22f, 692.60f, 55.50f, 2.84f, TEMPSPAWN_DEAD_DESPAWN, 0);
-                m_creature->SummonCreature(NPC_BARN_LOOKOUT,   2500.13f, 696.55f, 55.51f, 3.38f, TEMPSPAWN_DEAD_DESPAWN, 0);
+                Creature* protector = m_creature->SummonCreature(NPC_BARN_PROTECTOR, 2500.22f, 692.60f, 55.50f, 2.84f, TEMPSPAWN_DEAD_DESPAWN, 0);
+                Creature* lookout = m_creature->SummonCreature(NPC_BARN_LOOKOUT,   2500.13f, 696.55f, 55.51f, 3.38f, TEMPSPAWN_DEAD_DESPAWN, 0);
                 m_creature->SummonCreature(NPC_BARN_LOOKOUT, 2500.55f, 693.64f, 55.50f, 3.14f, TEMPSPAWN_DEAD_DESPAWN, 0);
                 m_creature->SummonCreature(NPC_BARN_GUARDSMAN, 2500.94f, 695.81f, 55.50f, 3.14f, TEMPSPAWN_DEAD_DESPAWN, 0);
+                if (protector)
+                    m_barnProtectorGuid = protector->GetObjectGuid();
+                if (lookout)
+                    m_barnLookoutGuid = lookout->GetObjectGuid();
                 break;
+            }
             // *** Escort event - Part III - start barn dialogue ***
             case 80:
                 m_creature->SetFacingTo(1.9f);

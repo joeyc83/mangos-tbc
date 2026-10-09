@@ -8229,24 +8229,6 @@ bool Unit::Mount(uint32 displayid, const Aura* aura/* = nullptr*/)
 
     RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_MOUNTING);
 
-    // Cancel cosmetic transformations that do not support mounting
-    AuraList transforms = GetAurasByType(SPELL_AURA_TRANSFORM);
-    for (Aura* aura : transforms)
-    {
-        bool canMount = false;
-        if (CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(aura->GetModifier()->m_amount))
-        {
-            if (CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId))
-            {
-                if (modelData->Flags & 0x80) // 0x80 = CREATURE_MODEL_FLAG_CAN_MOUNT
-                    canMount = true;
-            }
-        }
-
-        if (!canMount)
-            RemoveAura(aura);
-    }
-
     if (!m_isMountOverriden)
         SetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID, displayid);
     else

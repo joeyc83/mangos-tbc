@@ -723,23 +723,34 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             case 1:
                 m_pInstance->DoUseDoorOrButton(GO_PRISON_DOOR);
                 break;
+            case 9:
+                if (Creature* pArmorer = m_pInstance->GetSingleCreatureFromStorage(NPC_ARMORER))
+                {
+                    DoBroadcastText(SAY_ARMORER_CALL_GUARDS, pArmorer);
+                    pArmorer->SetFacingToObject(m_creature);
+                }
+                break;
             case 10:
+                DoBroadcastText(SAY_TH_KILL_ARMORER, m_creature);
+                DoCastSpellIfCan(m_creature, SPELL_KNOCKOUT_ARMORER);
+                break;
+            case 11:
                 DoBroadcastText(SAY_TH_ARMORY_1, m_creature);
                 m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
                 break;
-            case 11:
+            case 12:
                 m_creature->SetDisplayId(MODEL_THRALL_EQUIPPED);
                 break;
-            case 12:
+            case 13:
                 m_creature->SetStandState(UNIT_STAND_STATE_STAND);
                 break;
-            case 13:
+            case 14:
                 SetEquipmentSlots(false, EQUIP_ID_WEAPON, EQUIP_NO_CHANGE, EQUIP_NO_CHANGE);
                 break;
-            case 14:
+            case 15:
                 SetEquipmentSlots(false, EQUIP_NO_CHANGE, EQUIP_ID_SHIELD, EQUIP_NO_CHANGE);
                 break;
-            case 15:
+            case 16:
                 m_creature->SetWalk(false);
                 if (Creature* pArmorer = m_pInstance->GetSingleCreatureFromStorage(NPC_ARMORER))
                     m_creature->SetFacingToObject(pArmorer);

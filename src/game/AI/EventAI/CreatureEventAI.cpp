@@ -2083,4 +2083,6 @@ void CreatureEventAI::MovementInform(uint32 motionType, uint32 pointId)
         }
     }
     ProcessEvents();
+
+    CreatureAI::MovementInform(motionType, pointId);
 }

@@ -223,7 +223,7 @@ int32  Quest::GetRewOrReqMoney() const
 
 bool Quest::IsAllowedInRaid() const
 {
-    if (Type == QUEST_TYPE_RAID)
+    if (Type == QUEST_TYPE_RAID || Type == QUEST_TYPE_PVP)
         return true;
 
     return sWorld.getConfig(CONFIG_BOOL_QUEST_IGNORE_RAID);

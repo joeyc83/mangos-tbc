@@ -948,7 +948,7 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             // *** Escort event - Epilogue - run off ***
             case 124:
                 // return to position
-                m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE);
+                m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_ATTACKABLE_1 | UNIT_FLAG_UNTARGETABLE);
                 SetEscortPaused(true);
                 break;
             case 126:

@@ -575,7 +575,6 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
                 m_lTarrenMillSoldiersGuids.remove(pSummoned->GetObjectGuid());
                 if (m_lTarrenMillSoldiersGuids.empty())
                 {
-                    SetRun();
                     SetEscortPaused(false);
                 }
                 break;
@@ -706,7 +705,6 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
                     m_creature->SetFacingToObject(pTaretha);
                 break;
             case NPC_THRALL:
-                SetRun();
                 SetEscortPaused(false);
                 break;
         }

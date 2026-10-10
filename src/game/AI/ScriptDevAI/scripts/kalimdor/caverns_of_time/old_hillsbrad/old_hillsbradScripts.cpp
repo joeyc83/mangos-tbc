@@ -728,6 +728,8 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
                     pArmorer->GetMotionMaster()->MoveIdle();
                     pArmorer->StopMoving();
                     pArmorer->SetFacingToObject(m_creature);
+                    m_creature->SetFacingToObject(pArmorer);
+                    pArmorer->HandleEmoteCommand(EMOTE_ONESHOT_EXCLAMATION);
                 }
                 break;
             case 10:

@@ -14402,6 +14402,7 @@ void Player::KilledMonsterCredit(uint32 entry, ObjectGuid guid)
 
                     if (reqkill == entry)
                     {
+                    
                         uint32 reqkillcount = qInfo->ReqCreatureOrGOCount[j];
                         uint32 curkillcount = q_status.m_creatureOrGOcount[j];
                         if (curkillcount < reqkillcount)

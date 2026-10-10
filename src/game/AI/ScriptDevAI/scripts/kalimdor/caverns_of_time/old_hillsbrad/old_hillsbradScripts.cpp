@@ -721,10 +721,13 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             case 1:
                 m_pInstance->DoUseDoorOrButton(GO_PRISON_DOOR);
                 break;
+            case 8:
+                if (Creature* pArmorer = m_pInstance->GetSingleCreatureFromStorage(NPC_ARMORER))
+                    pArmorer->HandleEmoteState(EMOTE_ONESHOT_NONE);
+                break;
             case 9:
                 if (Creature* pArmorer = m_pInstance->GetSingleCreatureFromStorage(NPC_ARMORER))
                 {
-                    pArmorer->HandleEmoteState(EMOTE_ONESHOT_NONE);
                     DoBroadcastText(SAY_ARMORER_CALL_GUARDS, pArmorer);
                     pArmorer->GetMotionMaster()->MoveIdle();
                     pArmorer->StopMoving();

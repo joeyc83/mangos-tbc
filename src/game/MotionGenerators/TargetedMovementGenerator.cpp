@@ -252,12 +252,12 @@ void ChaseMovementGenerator::HandleTargetedMovement(Unit& owner, const uint32& t
             {
                 Position ownerPos;
                 owner.GetPosition(ownerPos.x, ownerPos.y, ownerPos.z, owner.GetTransport());
-                float distFromDestination = owner.GetDistance(dest.x, dest.y, dest.z, DIST_CALC_NONE, owner.GetTransport());
+                float distDestFromTarget = this->i_target->GetDistance(dest.x, dest.y, dest.z, DIST_CALC_NONE, owner.GetTransport());
                 float distOwnerFromTarget = this->i_target->GetDistance(ownerPos.x, ownerPos.y, ownerPos.z, DIST_CALC_NONE, owner.GetTransport());
                 // Explanation of magic: comparing distances between target and destination makes it so we know when mob is between destination and owner
                 // - thats when forcible spline stop is needed
                 float targetDist = this->i_target->GetCombinedCombatReach(&owner, this->i_offset == 0.f ? true : false);
-                if (distFromDestination > distOwnerFromTarget)
+                if (distDestFromTarget > distOwnerFromTarget)
                 {
                     if (this->i_target->GetDistance(ownerPos.x, ownerPos.y, ownerPos.z, DIST_CALC_NONE, owner.GetTransport()) < targetDist * targetDist)
                     {

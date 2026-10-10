@@ -724,6 +724,7 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             case 9:
                 if (Creature* pArmorer = m_pInstance->GetSingleCreatureFromStorage(NPC_ARMORER))
                 {
+                    pArmorer->HandleEmoteState(EMOTE_ONESHOT_NONE);
                     DoBroadcastText(SAY_ARMORER_CALL_GUARDS, pArmorer);
                     pArmorer->GetMotionMaster()->MoveIdle();
                     pArmorer->StopMoving();
@@ -733,8 +734,8 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
                 }
                 break;
             case 10:
-                DoBroadcastText(SAY_TH_KILL_ARMORER, m_creature);
                 DoCastSpellIfCan(m_creature, SPELL_KNOCKOUT_ARMORER);
+                DoBroadcastText(SAY_TH_KILL_ARMORER, m_creature);
                 break;
             case 11:
                 DoBroadcastText(SAY_TH_ARMORY_1, m_creature);

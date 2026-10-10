@@ -352,7 +352,7 @@ void BattleGroundAB::HandlePlayerClickedOnFlag(Player* player, GameObject* go)
     UpdatePlayerScore(player, scoreType, 1);
 
     if (scoreType == SCORE_BASES_ASSAULTED)
-        player->KilledMonsterCredit(go->GetEntry());
+        player->KilledMonsterCredit(15005 - node);
 
     // update banner object
     DoUpdateBanner(node, m_nodeStatus[node], true);

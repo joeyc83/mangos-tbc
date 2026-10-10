@@ -727,6 +727,8 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
                 if (Creature* pArmorer = m_pInstance->GetSingleCreatureFromStorage(NPC_ARMORER))
                 {
                     DoBroadcastText(SAY_ARMORER_CALL_GUARDS, pArmorer);
+                    pArmorer->GetMotionMaster()->MoveIdle();
+                    pArmorer->StopMoving();
                     pArmorer->SetFacingToObject(m_creature);
                 }
                 break;
@@ -945,6 +947,7 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
             // *** Escort event - Epilogue - run off ***
             case 124:
                 // return to position
+                m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE);
                 SetEscortPaused(true);
                 break;
             case 126:
@@ -1184,8 +1187,8 @@ static const DialogueEntry aTarethaDialogue[] =
     {SAY_WIPE_MEMORY,       NPC_EROZION,    12000, DIALOGUE_STEP_TEXT},
     {SAY_ABOUT_TARETHA,     NPC_EROZION,    6000, DIALOGUE_STEP_TEXT},
     {SAY_TH_EVENT_COMPLETE, NPC_THRALL,     3000, DIALOGUE_STEP_TEXT},
-    {NPC_THRALL,            0,              2000},
     {SAY_TA_FAREWELL,       NPC_TARETHA,    3000, DIALOGUE_STEP_TEXT},
+    {NPC_THRALL,            0,              2000},
     {NPC_TARETHA,           0,              0},
     {0, 0, 0},
 };

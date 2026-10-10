@@ -910,7 +910,10 @@ struct npc_thrall_old_hillsbradAI : public npc_escortAI, private DialogueHelper
                 m_pInstance->SetData(TYPE_ESCORT_INN, DONE);
                 m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
                 if (Creature* pTaretha = m_pInstance->GetSingleCreatureFromStorage(NPC_TARETHA))
+                {
+                    m_creature->SetFacingToObject(pTaretha);
                     pTaretha->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+                }
                 SetEscortPaused(true);
                 break;
             // *** Escort event - Part IV - Epoch ***

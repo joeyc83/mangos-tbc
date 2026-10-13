@@ -1288,6 +1288,8 @@ void UnitAI::UpdateSpellLists()
             {
                 success = executeSpell(spellId, scriptId, target);
                 itr = eligibleSpells.erase(itr);
+                if (success)
+                    break;
             }
             else
                 ++itr;

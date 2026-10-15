@@ -36,14 +36,14 @@ enum
 {
     QUEST_EXTINGUISHING_THE_IDOL    = 3525,
 
-    SAY_BELNISTRASZ_READY           = -1129005,
-    SAY_BELNISTRASZ_START_RIT       = -1129006,
-    SAY_BELNISTRASZ_HELP            = -1129007,
-    SAY_BELNISTRASZ_INCOMING        = -1129008,
-    SAY_BELNISTRASZ_3_MIN           = -1129009,
-    SAY_BELNISTRASZ_2_MIN           = -1129010,
-    SAY_BELNISTRASZ_1_MIN           = -1129011,
-    SAY_BELNISTRASZ_FINISH          = -1129012,
+    BCT_BELNISTRASZ_READY           = 4493,
+    BCT_BELNISTRASZ_START_RIT       = 4501,
+    BCT_BELNISTRASZ_HELP            = 9005,
+    BCT_BELNISTRASZ_INCOMING        = 9007,
+    BCT_BELNISTRASZ_3_MIN           = 4504,
+    BCT_BELNISTRASZ_2_MIN           = 4505,
+    BCT_BELNISTRASZ_1_MIN           = 4506,
+    BCT_BELNISTRASZ_FINISH          = 4507,
 
     NPC_IDOL_ROOM_SPAWNER           = 8611,
     NPC_IDOL_OVEN_FIRE_TARGET       = 8662,
@@ -108,7 +108,7 @@ struct npc_belnistraszAI : public npc_escortAI
         {
             if (!m_bAggro)
             {
-                DoScriptText(SAY_BELNISTRASZ_HELP, m_creature);
+                DoBroadcastText(BCT_BELNISTRASZ_HELP, m_creature, nullptr, CHAT_TYPE_YELL);
                 m_bAggro = true;
             }
 
@@ -123,7 +123,7 @@ struct npc_belnistraszAI : public npc_escortAI
         if (m_uiRitualPhase > 7)
         {
             if (Creature* pPlaguemaw = pSummoner->SummonCreature(NPC_PLAGUEMAW_THE_ROTTING, pSummoner->GetPositionX(), pSummoner->GetPositionY(), pSummoner->GetPositionZ(), pSummoner->GetOrientation(), TEMPSPAWN_TIMED_OOC_DESPAWN, 60000))
-                DoScriptText(SAY_BELNISTRASZ_INCOMING, m_creature, pPlaguemaw);
+                DoBroadcastText(BCT_BELNISTRASZ_INCOMING, m_creature, pPlaguemaw, CHAT_TYPE_YELL);
             return;
         }
 
@@ -159,7 +159,7 @@ struct npc_belnistraszAI : public npc_escortAI
         }
 
         if (pAnnounceCreature && urand(0, 100) < 50)
-            DoScriptText(SAY_BELNISTRASZ_INCOMING, m_creature, pAnnounceCreature);
+            DoBroadcastText(BCT_BELNISTRASZ_INCOMING, m_creature, pAnnounceCreature, CHAT_TYPE_YELL);
     }
 
     void JustSummoned(Creature* pSummoned) override
@@ -176,7 +176,7 @@ struct npc_belnistraszAI : public npc_escortAI
     {
         if (uiPointId == 24)
         {
-            DoScriptText(SAY_BELNISTRASZ_START_RIT, m_creature);
+            DoBroadcastText(BCT_BELNISTRASZ_START_RIT, m_creature);
             if (Creature* pTarget = GetClosestCreatureWithEntry(m_creature, NPC_IDOL_OVEN_FIRE_TARGET, 25.0f))
                 m_creature->SetFacingToObject(pTarget);
             else
@@ -215,7 +215,7 @@ struct npc_belnistraszAI : public npc_escortAI
                         m_uiRitualTimer = 20000;
                         break;
                     case 3:
-                        DoScriptText(SAY_BELNISTRASZ_3_MIN, m_creature, m_creature);
+                        DoBroadcastText(BCT_BELNISTRASZ_3_MIN, m_creature, nullptr, CHAT_TYPE_YELL);
                         m_uiRitualTimer = 20000;
                         break;
                     case 4:
@@ -224,7 +224,7 @@ struct npc_belnistraszAI : public npc_escortAI
                         break;
                     case 5:
                         DoSummonSpawner(urand(0, 2));
-                        DoScriptText(SAY_BELNISTRASZ_2_MIN, m_creature, m_creature);
+                        DoBroadcastText(BCT_BELNISTRASZ_2_MIN, m_creature, nullptr, CHAT_TYPE_YELL);
                         m_uiRitualTimer = 40000;
                         break;
                     case 6:
@@ -232,7 +232,7 @@ struct npc_belnistraszAI : public npc_escortAI
                         m_uiRitualTimer = 20000;
                         break;
                     case 7:
-                        DoScriptText(SAY_BELNISTRASZ_1_MIN, m_creature, m_creature);
+                        DoBroadcastText(BCT_BELNISTRASZ_1_MIN, m_creature, nullptr, CHAT_TYPE_YELL);
                         m_uiRitualTimer = 40000;
                         break;
                     case 8:
@@ -240,7 +240,7 @@ struct npc_belnistraszAI : public npc_escortAI
                         m_uiRitualTimer = 20000;
                         break;
                     case 9:
-                        DoScriptText(SAY_BELNISTRASZ_FINISH, m_creature, m_creature);
+                        DoBroadcastText(BCT_BELNISTRASZ_FINISH, m_creature, nullptr, CHAT_TYPE_YELL);
                         m_uiRitualTimer = 3000;
                         break;
                     case 10:
@@ -318,7 +318,7 @@ bool QuestAccept_npc_belnistrasz(Player* pPlayer, Creature* pCreature, const Que
         if (npc_belnistraszAI* pEscortAI = dynamic_cast<npc_belnistraszAI*>(pCreature->AI()))
         {
             pEscortAI->Start(true, pPlayer, pQuest);
-            DoScriptText(SAY_BELNISTRASZ_READY, pCreature, pPlayer);
+            DoBroadcastText(BCT_BELNISTRASZ_READY, pCreature, pPlayer);
             pCreature->SetFactionTemporary(FACTION_ESCORT_N_NEUTRAL_ACTIVE, TEMPFACTION_RESTORE_RESPAWN);
         }
     }

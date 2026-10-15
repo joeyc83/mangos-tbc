@@ -38,14 +38,15 @@ enum
 
     SAY_BELNISTRASZ_READY           = -1129005,
     SAY_BELNISTRASZ_START_RIT       = -1129006,
-    SAY_BELNISTRASZ_AGGRO_1         = -1129007,
-    SAY_BELNISTRASZ_AGGRO_2         = -1129008,
+    SAY_BELNISTRASZ_HELP            = -1129007,
+    SAY_BELNISTRASZ_INCOMING        = -1129008,
     SAY_BELNISTRASZ_3_MIN           = -1129009,
     SAY_BELNISTRASZ_2_MIN           = -1129010,
     SAY_BELNISTRASZ_1_MIN           = -1129011,
     SAY_BELNISTRASZ_FINISH          = -1129012,
 
     NPC_IDOL_ROOM_SPAWNER           = 8611,
+    NPC_IDOL_OVEN_FIRE_TARGET       = 8662,
 
     NPC_WITHERED_BATTLE_BOAR        = 7333,
     NPC_WITHERED_QUILGUARD          = 7329,
@@ -107,7 +108,7 @@ struct npc_belnistraszAI : public npc_escortAI
         {
             if (!m_bAggro)
             {
-                DoScriptText(urand(0, 1) ? SAY_BELNISTRASZ_AGGRO_1 : SAY_BELNISTRASZ_AGGRO_2, m_creature, pAttacker);
+                DoScriptText(SAY_BELNISTRASZ_HELP, m_creature);
                 m_bAggro = true;
             }
 
@@ -121,10 +122,12 @@ struct npc_belnistraszAI : public npc_escortAI
     {
         if (m_uiRitualPhase > 7)
         {
-            pSummoner->SummonCreature(NPC_PLAGUEMAW_THE_ROTTING, pSummoner->GetPositionX(), pSummoner->GetPositionY(), pSummoner->GetPositionZ(), pSummoner->GetOrientation(), TEMPSPAWN_TIMED_OOC_DESPAWN, 60000);
+            if (Creature* pPlaguemaw = pSummoner->SummonCreature(NPC_PLAGUEMAW_THE_ROTTING, pSummoner->GetPositionX(), pSummoner->GetPositionY(), pSummoner->GetPositionZ(), pSummoner->GetOrientation(), TEMPSPAWN_TIMED_OOC_DESPAWN, 60000))
+                DoScriptText(SAY_BELNISTRASZ_INCOMING, m_creature, pPlaguemaw);
             return;
         }
 
+        Creature* pAnnounceCreature = nullptr;
         for (int i = 0; i < 4; ++i)
         {
             uint32 uiEntry = 0;
@@ -148,8 +151,15 @@ struct npc_belnistraszAI : public npc_escortAI
                     break;
             }
 
-            pSummoner->SummonCreature(uiEntry, fX, fZ, fY, 0.0f, TEMPSPAWN_TIMED_OOC_DESPAWN, 60000);
+            if (Creature* pSpawn = pSummoner->SummonCreature(uiEntry, fX, fZ, fY, 0.0f, TEMPSPAWN_TIMED_OOC_DESPAWN, 60000))
+            {
+                if (!pAnnounceCreature && (uiEntry == NPC_DEATHS_HEAD_GEOMANCER || uiEntry == NPC_WITHERED_QUILGUARD))
+                    pAnnounceCreature = pSpawn;
+            }
         }
+
+        if (pAnnounceCreature && urand(0, 100) < 50)
+            DoScriptText(SAY_BELNISTRASZ_INCOMING, m_creature, pAnnounceCreature);
     }
 
     void JustSummoned(Creature* pSummoned) override
@@ -167,6 +177,11 @@ struct npc_belnistraszAI : public npc_escortAI
         if (uiPointId == 24)
         {
             DoScriptText(SAY_BELNISTRASZ_START_RIT, m_creature);
+            if (Creature* pTarget = GetClosestCreatureWithEntry(m_creature, NPC_IDOL_OVEN_FIRE_TARGET, 25.0f))
+                m_creature->SetFacingToObject(pTarget);
+            else
+                m_creature->SetFacingTo(5.401f);
+
             SetEscortPaused(true);
         }
     }
@@ -180,9 +195,17 @@ struct npc_belnistraszAI : public npc_escortAI
                 switch (m_uiRitualPhase)
                 {
                     case 0:
-                        DoCastSpellIfCan(m_creature, SPELL_IDOL_SHUTDOWN);
+                    {
+                        Creature* pTarget = GetClosestCreatureWithEntry(m_creature, NPC_IDOL_OVEN_FIRE_TARGET, 25.0f);
+                        if (pTarget)
+                            m_creature->SetFacingToObject(pTarget);
+                        else
+                            m_creature->SetFacingTo(5.401f);
+
+                        DoCastSpellIfCan(pTarget ? static_cast<Unit*>(pTarget) : m_creature, SPELL_IDOL_SHUTDOWN);
                         m_uiRitualTimer = 1000;
                         break;
+                    }
                     case 1:
                         DoSummonSpawner(urand(0, 2));
                         m_uiRitualTimer = 39000;

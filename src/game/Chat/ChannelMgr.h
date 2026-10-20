@@ -22,6 +22,7 @@
 #include "Chat/Channel.h"
 
 #include <map>
+#include <mutex>
 
 class ChannelMgr
 {
@@ -30,13 +31,18 @@ class ChannelMgr
         ChannelMgr() {}
         ~ChannelMgr();
 
-        const ChannelMap& GetChannels() const { return channels; }
+        ChannelMap GetChannels() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mgrLock);
+            return channels;
+        }
 
         Channel* GetJoinChannel(const std::string& name, uint32 channel_id);
         Channel* GetChannel(const std::string& name, Player* p, bool pkt = true);
         void LeftChannel(const std::string& name);
     private:
         ChannelMap channels;
+        mutable std::recursive_mutex m_mgrLock;
 };
 
 class AllianceChannelMgr : public ChannelMgr {};

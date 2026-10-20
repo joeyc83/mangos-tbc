@@ -25,6 +25,8 @@
 #include "Entities/Player.h"
 
 #include <map>
+#include <mutex>
+#include <vector>
 
 enum ChatNotify : uint8
 {
@@ -145,7 +147,7 @@ class Channel
         bool IsLFG() const { return (GetFlags() & CHANNEL_FLAG_LFG) != 0; }
         inline bool IsPublic() const { return (IsConstant() || IsStatic()); }
         std::string GetPassword() const { return m_password; }
-        size_t GetNumPlayers() const { return m_players.size(); }
+        size_t GetNumPlayers() const { std::lock_guard<std::recursive_mutex> lock(m_channelLock); return m_players.size(); }
         uint8 GetFlags() const { return m_flags; }
         bool HasFlag(uint8 flag) const { return (m_flags & flag) != 0; }
 
@@ -219,11 +221,12 @@ class Channel
         void SendToAll(WorldPacket const& data) const;
         void SendMessage(WorldPacket const& data, ObjectGuid sender) const;
 
-        bool IsOn(ObjectGuid who) const { return m_players.find(who) != m_players.end(); }
-        bool IsBanned(ObjectGuid guid) const { return m_banned.find(guid) != m_banned.end(); }
+        bool IsOn(ObjectGuid who) const { std::lock_guard<std::recursive_mutex> lock(m_channelLock); return m_players.find(who) != m_players.end(); }
+        bool IsBanned(ObjectGuid guid) const { std::lock_guard<std::recursive_mutex> lock(m_channelLock); return m_banned.find(guid) != m_banned.end(); }
 
         uint8 GetPlayerFlags(ObjectGuid guid) const
         {
+            std::lock_guard<std::recursive_mutex> lock(m_channelLock);
             PlayerList::const_iterator p_itr = m_players.find(guid);
             if (p_itr == m_players.end())
                 return 0;
@@ -249,5 +252,6 @@ class Channel
         // Custom features:
         bool                        m_static = false;
         bool                        m_realmzone = false;
+        mutable std::recursive_mutex m_channelLock;
 };
 #endif

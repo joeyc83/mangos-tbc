@@ -38,6 +38,7 @@ ChannelMgr* channelMgr(Team team)
 
 ChannelMgr::~ChannelMgr()
 {
+    std::lock_guard<std::recursive_mutex> lock(m_mgrLock);
     for (auto& channel : channels)
         delete channel.second;
 
@@ -46,6 +47,7 @@ ChannelMgr::~ChannelMgr()
 
 Channel* ChannelMgr::GetJoinChannel(const std::string& name, uint32 channel_id)
 {
+    std::lock_guard<std::recursive_mutex> lock(m_mgrLock);
     std::wstring wname;
     Utf8toWStr(name, wname);
     wstrToLower(wname);
@@ -62,6 +64,7 @@ Channel* ChannelMgr::GetJoinChannel(const std::string& name, uint32 channel_id)
 
 Channel* ChannelMgr::GetChannel(const std::string& name, Player* p, bool pkt)
 {
+    std::lock_guard<std::recursive_mutex> lock(m_mgrLock);
     std::wstring wname;
     Utf8toWStr(name, wname);
     wstrToLower(wname);
@@ -84,6 +87,7 @@ Channel* ChannelMgr::GetChannel(const std::string& name, Player* p, bool pkt)
 
 void ChannelMgr::LeftChannel(const std::string& name)
 {
+    std::lock_guard<std::recursive_mutex> lock(m_mgrLock);
     std::wstring wname;
     Utf8toWStr(name, wname);
     wstrToLower(wname);

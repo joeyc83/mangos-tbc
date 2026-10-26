@@ -1068,7 +1068,7 @@ struct FireExtinguish : public SpellScript
 
         if (Unit* unitTarget = spell->GetUnitTarget())
         {
-            if (unitTarget->GetEntry() == NPC_HEADLESS_HORSEMAN_FIRE)
+            if (unitTarget->GetEntry() == NPC_HEADLESS_HORSEMAN_FIRE && unitTarget->HasAura(SPELL_FIRE))
             {
                 unitTarget->CastSpell(nullptr, SPELL_INVISIBLE_CAMPFIRE_REMOVE, TRIGGERED_OLD_TRIGGERED);
                 unitTarget->RemoveAllAuras();

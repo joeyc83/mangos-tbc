@@ -87,10 +87,22 @@ struct guard_hallows_end_helperAI : public guardAI
         if (motionType != POINT_MOTION_TYPE)
             return;
 
-        if (point)
+        if (point == 1)
         {
             m_creature->GetMotionMaster()->MoveIdle();
             relightTimer = 5000;
+        }
+    }
+
+    void PopulatePracticeFires()
+    {
+        lPracticeFires.clear();
+        std::list<Creature*> lPracticeFireCreatures;
+        GetCreatureListWithEntryInGrid(lPracticeFireCreatures, m_creature, NPC_HEADLESS_HORSEMAN_FIRE, 70.f);
+        for (auto& fire : lPracticeFireCreatures)
+        {
+            fire->SetActiveObjectState(true);
+            lPracticeFires.push_back(fire->GetObjectGuid());
         }
     }
 
@@ -106,10 +118,30 @@ struct guard_hallows_end_helperAI : public guardAI
                     {
                         relightTimer = 3000;
 
-                        if (DoCastSpellIfCan(nullptr, SPELL_START_FIRE_TARGET_TEST_GUARD, CAST_TRIGGERED) == CAST_OK)
+                        CanCastResult castResult = DoCastSpellIfCan(nullptr, SPELL_START_FIRE_TARGET_TEST_GUARD, CAST_TRIGGERED);
+                        if (castResult == CAST_OK)
                             relitCount++;
 
-                        if (relitCount == lPracticeFires.size())
+                        bool allRelit = (relitCount >= lPracticeFires.size());
+                        if (!allRelit && castResult != CAST_OK)
+                        {
+                            bool anyUnlit = false;
+                            for (ObjectGuid fireGuid : lPracticeFires)
+                            {
+                                if (Creature* fire = m_creature->GetMap()->GetCreature(fireGuid))
+                                {
+                                    if (!fire->HasAura(SPELL_FIRE))
+                                    {
+                                        anyUnlit = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!anyUnlit)
+                                allRelit = true;
+                        }
+
+                        if (allRelit)
                         {
                             relitCount = 0;
                             relightingFires = false;
@@ -135,41 +167,41 @@ struct guard_hallows_end_helperAI : public guardAI
 
                         checkExtinguishedTimer = 3000;
                         extinguishedCount = 0;
-                        if (lPracticeFires.size() < 3)
-                        {
-                            std::list<Creature*> lPracticeFireCreatures;
-                            GetCreatureListWithEntryInGrid(lPracticeFireCreatures, m_creature, NPC_HEADLESS_HORSEMAN_FIRE, 65.f);
-                            for (auto& fire : lPracticeFireCreatures)
-                                lPracticeFires.push_back(fire->GetObjectGuid());
-                        }
-                        for (ObjectGuid fireGuid : lPracticeFires)
-                            if (Creature* fire = m_creature->GetMap()->GetCreature(fireGuid))
-                                if (!fire->HasAura(SPELL_FIRE))
-                                    extinguishedCount++;
+                        if (lPracticeFires.size() < 5)
+                            PopulatePracticeFires();
 
-                        if (extinguishedCount == lPracticeFires.size())
+                        if (!lPracticeFires.empty())
                         {
-                            DoScriptText(SAY_GUARD_RELIGHT_FIRE, m_creature);
-                            relightingFires = true;
-                            m_creature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+                            for (ObjectGuid fireGuid : lPracticeFires)
+                                if (Creature* fire = m_creature->GetMap()->GetCreature(fireGuid))
+                                    if (!fire->HasAura(SPELL_FIRE))
+                                        extinguishedCount++;
 
-                            switch (m_creature->GetEntry())
+                            if (extinguishedCount == lPracticeFires.size())
                             {
-                                case NPC_DEATHGUARD_FLORENCE:
-                                    m_creature->GetMotionMaster()->MovePoint(1, Position(2242.474f, 474.683f, 36.0789f, 3.351452f));
-                                    break;
-                                case NPC_RAZOR_HILL_GRUNT:
-                                    m_creature->GetMotionMaster()->MovePoint(1, Position(277.6265f, -4563.144f, 24.1798f, 5.736432f));
-                                    break;
-                                case NPC_IRONFORGE_MOUNTAINEER:
-                                    m_creature->GetMotionMaster()->MovePoint(1, Position(-5755.2036f, -504.95849f, 397.72644f, 4.769157f));
-                                    break;
-                                case NPC_STORMWIND_GUARD:
-                                    m_creature->GetMotionMaster()->MovePoint(1, Position(-9331.7294f, 50.873886f, 60.544579f, 0.261875f));
-                                    break;
-                                default: // no movement required, already stationed close enough (should all have to move in TBC?)
-                                    relightTimer = 5000;
-                                    break;
+                                DoScriptText(SAY_GUARD_RELIGHT_FIRE, m_creature);
+                                relightingFires = true;
+                                relitCount = 0;
+                                m_creature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+
+                                switch (m_creature->GetEntry())
+                                {
+                                    case NPC_DEATHGUARD_FLORENCE:
+                                        m_creature->GetMotionMaster()->MovePoint(1, Position(2242.474f, 474.683f, 36.0789f, 3.351452f));
+                                        break;
+                                    case NPC_RAZOR_HILL_GRUNT:
+                                        m_creature->GetMotionMaster()->MovePoint(1, Position(277.6265f, -4563.144f, 24.1798f, 5.736432f));
+                                        break;
+                                    case NPC_IRONFORGE_MOUNTAINEER:
+                                        m_creature->GetMotionMaster()->MovePoint(1, Position(-5755.2036f, -504.95849f, 397.72644f, 4.769157f));
+                                        break;
+                                    case NPC_STORMWIND_GUARD:
+                                        m_creature->GetMotionMaster()->MovePoint(1, Position(-9331.7294f, 50.873886f, 60.544579f, 0.261875f));
+                                        break;
+                                    default: // no movement required, already stationed close enough (should all have to move in TBC?)
+                                        relightTimer = 5000;
+                                        break;
+                                }
                             }
                         }
                     }

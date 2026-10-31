@@ -630,59 +630,71 @@ void Channel::ToggleModeration(Player* player)
 
 void Channel::Say(Player* player, const char* text, uint32 lang)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_channelLock);
     if (!text)
         return;
 
     ObjectGuid guid = player->GetObjectGuid();
+    bool moderator = false;
+    WorldPacket data;
+    bool sendNotMember = false;
+    bool sendMuted = false;
+    bool sendNotModerator = false;
+    std::string channelName;
 
-    if (!IsOn(guid))
     {
-        WorldPacket data;
-        MakeNotMember(data, m_name);
-        SendToOne(data, guid);
-        return;
-    }
+        std::lock_guard<std::recursive_mutex> lock(m_channelLock);
 
-    if (m_players[guid].IsMuted())
-    {
-        WorldPacket data;
-        MakeMuted(data, m_name);
-        SendToOne(data, guid);
-        return;
-    }
-
-    const bool moderator = m_players[guid].IsModerator();
-
-    const uint32 level = sWorld.getConfig(CONFIG_UINT32_GM_LEVEL_CHANNEL_MODERATION);
-    const bool gm = (level && player->GetSession()->GetSecurity() >= level);
-
-    if (m_moderation && !moderator && !gm)
-    {
-        WorldPacket data;
-        MakeNotModerator(data, m_name);
-        SendToOne(data, guid);
-        return;
-    }
-
-    if (uint32 restriction = sWorld.getConfig(CONFIG_UINT32_CHANNEL_RESTRICTED_LANGUAGE_MODE))
-    {
-        bool restricted = false;
-
-        switch (restriction)
+        PlayerList::const_iterator itr = m_players.find(guid);
+        if (itr == m_players.end())
         {
-            case 1: restricted = IsConstant();                  break;
-            case 2: restricted = (IsPublic() && m_realmzone);   break;
-            case 3: restricted = true;                          break;
+            MakeNotMember(data, m_name);
+            sendNotMember = true;
         }
-
-        if (restricted && !sObjectMgr.CheckPublicMessageLanguage(text))
+        else if (itr->second.IsMuted())
         {
-            WorldPacket data;
             MakeMuted(data, m_name);
-            SendToOne(data, guid);
-            return;
+            sendMuted = true;
         }
+        else
+        {
+            moderator = itr->second.IsModerator();
+
+            const uint32 level = sWorld.getConfig(CONFIG_UINT32_GM_LEVEL_CHANNEL_MODERATION);
+            const bool gm = (level && player->GetSession()->GetSecurity() >= level);
+
+            if (m_moderation && !moderator && !gm)
+            {
+                MakeNotModerator(data, m_name);
+                sendNotModerator = true;
+            }
+            else
+            {
+                if (uint32 restriction = sWorld.getConfig(CONFIG_UINT32_CHANNEL_RESTRICTED_LANGUAGE_MODE))
+                {
+                    bool restricted = false;
+
+                    switch (restriction)
+                    {
+                        case 1: restricted = IsConstant();                  break;
+                        case 2: restricted = (IsPublic() && m_realmzone);   break;
+                        case 3: restricted = true;                          break;
+                    }
+
+                    if (restricted && !sObjectMgr.CheckPublicMessageLanguage(text))
+                    {
+                        MakeMuted(data, m_name);
+                        sendMuted = true;
+                    }
+                }
+            }
+        }
+        channelName = m_name;
+    }
+
+    if (sendNotMember || sendMuted || sendNotModerator)
+    {
+        SendToOne(data, guid);
+        return;
     }
 
     // send channel message
@@ -691,8 +703,7 @@ void Channel::Say(Player* player, const char* text, uint32 lang)
 
     auto const silenced = player->GetSession()->GetAnticheat()->IsSilenced();
 
-    WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_CHANNEL, text, Language(lang), player->GetChatTag(), guid, player->GetName(), ObjectGuid(), "", m_name.c_str());
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_CHANNEL, text, Language(lang), player->GetChatTag(), guid, player->GetName(), ObjectGuid(), "", channelName.c_str());
     // if the source is silenced, send only to them
     if (silenced)
         player->GetSession()->SendPacket(data);

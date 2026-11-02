@@ -82,6 +82,7 @@ struct CastFishingNet : public SpellScript
 enum
 {
     // quest 6661
+    QUEST_DEEPRUN_RAT_ROUNDUP           = 6661,
     SPELL_MELODIOUS_RAPTURE             = 21050,
     SPELL_MELODIOUS_RAPTURE_VISUAL      = 21051,
     NPC_DEEPRUN_RAT                     = 13016,
@@ -95,6 +96,15 @@ struct MelodiousRapture : public SpellScript
     {
         Unit* target = spell->m_targets.getUnitTarget();
         if (!target || target->GetEntry() != NPC_DEEPRUN_RAT)
+            return SPELL_FAILED_BAD_TARGETS;
+
+        Unit* caster = spell->GetCaster();
+        if (!caster->IsPlayer())
+            return SPELL_FAILED_BAD_TARGETS;
+
+        Player* player = static_cast<Player*>(caster);
+        if (player->GetQuestStatus(QUEST_DEEPRUN_RAT_ROUNDUP) != QUEST_STATUS_INCOMPLETE &&
+            player->GetQuestStatus(QUEST_DEEPRUN_RAT_ROUNDUP) != QUEST_STATUS_COMPLETE)
             return SPELL_FAILED_BAD_TARGETS;
 
         return SPELL_CAST_OK;

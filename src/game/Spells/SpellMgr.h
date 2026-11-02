@@ -1703,6 +1703,7 @@ inline bool IsIgnoreLosSpell(SpellEntry const* spellInfo)
 
     switch (spellInfo->Id)
     {
+        case 21052:                                 // Monty Bashes Rats (DND)
         case 8733:                                  // Blessing of Blackfathom - potentially hints at trap GO casts not respecting los
         case 8735:                                  // Blackfathom Teleport - same
         case 24742:                                 // Magic Wings

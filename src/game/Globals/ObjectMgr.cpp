@@ -2973,6 +2973,8 @@ struct SQLItemLoader : public SQLStorageLoaderBase<SQLItemLoader, SQLStorage>
 
 void ObjectMgr::LoadItemPrototypes()
 {
+    m_onStoreSpells.clear();
+
     SQLItemLoader loader;
     loader.Load(sItemStorage);
 
@@ -2991,6 +2993,10 @@ void ObjectMgr::LoadItemPrototypes()
         }
 
         for (const auto& Spell : proto->Spells)
+        {
+            if (Spell.SpellId && Spell.SpellTrigger == ITEM_SPELLTRIGGER_ON_STORE)
+                m_onStoreSpells.insert(Spell.SpellId);
+
             if (Spell.SpellCategory && Spell.SpellId)
             {
                 if (sSpellTemplate.LookupEntry<SpellEntry>(Spell.SpellId))
@@ -2998,6 +3004,7 @@ void ObjectMgr::LoadItemPrototypes()
                 else
                     sLog.outErrorDb("Item (Entry: %u) not correct %u spell id, must exist in spell table.", i, Spell.SpellId);
             }
+        }
 
         if (dbcitem)
         {

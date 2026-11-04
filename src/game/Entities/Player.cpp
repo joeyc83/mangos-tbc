@@ -15498,6 +15498,24 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     // update items with duration and realtime
     UpdateItemDuration(time_diff, true);
 
+    // Clean up any orphaned auras from ITEM_SPELLTRIGGER_ON_STORE whose items no longer exist in inventory
+    for (SpellAuraHolderMap::iterator iter = m_spellAuraHolders.begin(); iter != m_spellAuraHolders.end();)
+    {
+        SpellAuraHolder* auraHolder = iter->second;
+        ++iter;
+
+        ObjectGuid const& itemGuid = auraHolder->GetCastItemGuid();
+        if (itemGuid && itemGuid.IsItem() && !GetItemByGuid(itemGuid))
+        {
+            if (sObjectMgr.IsOnStoreSpell(auraHolder->GetId()))
+            {
+                CharacterDatabase.PExecute("DELETE FROM character_aura WHERE guid = '%u' AND item_guid = '%u' AND spell = '%u'",
+                    GetGUIDLow(), itemGuid.GetCounter(), auraHolder->GetId());
+                RemoveSpellAuraHolder(auraHolder);
+            }
+        }
+    }
+
     // After quests and inventory loaded: force update on quest item counters
     // Fixes cases when quest status data was not correctly saved during last session (crash, db connection lost, etc)
     for (auto& data : mQuestStatus)
@@ -15870,7 +15888,9 @@ void Player::_LoadInventory(std::unique_ptr<QueryResult> queryResult, uint32 tim
             // not allow have in alive state item limited to another map/zone
             if (IsAlive() && item->IsLimitedToAnotherMapOrZone(GetMapId(), zone))
             {
+                ApplyItemOnStoreSpell(item, false);
                 CharacterDatabase.PExecute("DELETE FROM character_inventory WHERE item = '%u'", item_lowguid);
+                CharacterDatabase.PExecute("DELETE FROM character_aura WHERE guid = '%u' AND item_guid = '%u'", GetGUIDLow(), item_lowguid);
                 item->FSetState(ITEM_REMOVED);
                 item->SaveToDB();                           // it also deletes item object !
                 continue;
@@ -15879,7 +15899,9 @@ void Player::_LoadInventory(std::unique_ptr<QueryResult> queryResult, uint32 tim
             // "Conjured items disappear if you are logged out for more than 15 minutes"
             if (timediff > 15 * MINUTE && (item->GetProto()->Flags & ITEM_FLAG_CONJURED))
             {
+                ApplyItemOnStoreSpell(item, false);
                 CharacterDatabase.PExecute("DELETE FROM character_inventory WHERE item = '%u'", item_lowguid);
+                CharacterDatabase.PExecute("DELETE FROM character_aura WHERE guid = '%u' AND item_guid = '%u'", GetGUIDLow(), item_lowguid);
                 item->FSetState(ITEM_REMOVED);
                 item->SaveToDB();                           // it also deletes item object !
                 continue;
@@ -15958,7 +15980,9 @@ void Player::_LoadInventory(std::unique_ptr<QueryResult> queryResult, uint32 tim
             else
             {
                 sLog.outError("Player::_LoadInventory: Player %s has item (GUID: %u Entry: %u) can't be loaded to inventory (Bag GUID: %u Slot: %u) by some reason, will send by mail.", GetName(), item_lowguid, item_id, bag_guid, slot);
+                ApplyItemOnStoreSpell(item, false);
                 CharacterDatabase.PExecute("DELETE FROM character_inventory WHERE item = '%u'", item_lowguid);
+                CharacterDatabase.PExecute("DELETE FROM character_aura WHERE guid = '%u' AND item_guid = '%u'", GetGUIDLow(), item_lowguid);
                 problematicItems.push_back(item);
             }
         }

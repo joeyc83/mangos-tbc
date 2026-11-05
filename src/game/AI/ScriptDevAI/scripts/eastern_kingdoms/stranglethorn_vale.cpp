@@ -127,25 +127,40 @@ struct mob_colonel_kurzenAI : public CombatAI
         AddCombatAction(KURZEN_ACTION_GAROTTE, true);
     }
 
+    void Reset() override
+    {
+        CombatAI::Reset();
+        m_creature->SetCombatOnlyStealth(false);
+        SetMeleeEnabled(true);
+    }
+
+    void JustDied(Unit* killer) override
+    {
+        CombatAI::JustDied(killer);
+        m_creature->SetCombatOnlyStealth(false);
+        SetMeleeEnabled(true);
+    }
+
     void ExecuteAction(uint32 action) override
     {
         switch (action)
         {
             case KURZEN_ACTION_VANISH:
             {
+                SetMeleeEnabled(false);
                 m_creature->SetCombatOnlyStealth(true); // must be before smoke bomb
                 DoCastSpellIfCan(nullptr, SPELL_SMOKE_BOMB);
-                ResetCombatAction(KURZEN_ACTION_GAROTTE, urand(2000, 6000));
+                ResetCombatAction(KURZEN_ACTION_GAROTTE, urand(2000, 2500));
                 DisableCombatAction(action);
                 break;
             }
             case KURZEN_ACTION_GAROTTE:
             {
-                // Safety check if we still have Stealth Aura
-                if (m_creature->HasAura(SPELL_STEALTH))
+                if (m_creature->GetVictim() && m_creature->HasAuraType(SPELL_AURA_MOD_STEALTH))
                     DoCastSpellIfCan(m_creature->GetVictim(), SPELL_GARROTE);
 
                 m_creature->SetCombatOnlyStealth(false);
+                SetMeleeEnabled(true);
                 ResetCombatAction(KURZEN_ACTION_VANISH, urand(6000, 12000));
                 DisableCombatAction(action);
                 break;

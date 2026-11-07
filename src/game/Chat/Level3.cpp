@@ -3292,7 +3292,9 @@ bool ChatHandler::HandleDieCommand(char* args)
     else
     {
         if (target->IsAlive())
-            Unit::DealDamage(player, target, target->GetHealth(), nullptr, INSTAKILL, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+            Unit::Kill(player, target, INSTAKILL, nullptr, false, false);
+        else if (target->GetTypeId() == TYPEID_UNIT)
+            static_cast<Creature*>(target)->ForcedDespawn();
     }
 
     return true;

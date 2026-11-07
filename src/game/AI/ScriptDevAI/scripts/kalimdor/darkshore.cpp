@@ -546,10 +546,9 @@ enum
     QUEST_PLAGUED_LANDS             = 2118,
 
     NPC_CAPTURED_RABID_THISTLE_BEAR = 11836,
-    NPC_THARNARIUN_TREETENDER       = 3701,                 // Npc related to quest-outro
-    GO_NIGHT_ELVEN_BEAR_TRAP        = 111148,               // This is actually the (visual) spell-focus GO
+    NPC_THARNARIUN_TREETENDER       = 3701,
 
-    SPELL_RABIES                    = 3150,                 // Spell used in comabt
+    SPELL_RABIES                    = 3150,                 // Spell used in combat
     SPELL_BEAR_CAPTURED             = 9439
 };
 
@@ -558,77 +557,42 @@ struct npc_rabid_bearAI : public ScriptedAI
     npc_rabid_bearAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
         Reset();
-        JustRespawned();
     }
 
-    uint32 m_uiCheckTimer;
     uint32 m_uiRabiesTimer;
-    uint32 m_uiDespawnTimer;
 
     void Reset() override
     {
         m_uiRabiesTimer = urand(12000, 18000);
     }
 
-    void JustRespawned() override
-    {
-        m_uiCheckTimer = 1000;
-        m_uiDespawnTimer = 0;
-    }
-
-    void MoveInLineOfSight(Unit* pWho) override
-    {
-        if (!m_uiCheckTimer && pWho->GetTypeId() == TYPEID_UNIT && pWho->GetEntry() == NPC_THARNARIUN_TREETENDER &&
-                pWho->IsWithinDist(m_creature, 2 * INTERACTION_DISTANCE, false))
-        {
-            // Possible related spell: 9455 9372
-            m_creature->ForcedDespawn(1000);
-            m_creature->GetMotionMaster()->MoveIdle();
-
-            return;
-        }
-
-        ScriptedAI::MoveInLineOfSight(pWho);
-    }
-
     void SpellHit(Unit* pCaster, const SpellEntry* pSpell) override
     {
         if (pCaster->GetTypeId() == TYPEID_PLAYER && pSpell->Id == SPELL_BEAR_CAPTURED)
         {
-            m_creature->RemoveAllAurasOnEvade();
-            m_creature->CombatStop(true);
-            m_creature->SetLootRecipient(nullptr);
-            Reset();
-            // Update Entry and start following player
-            m_creature->UpdateEntry(NPC_CAPTURED_RABID_THISTLE_BEAR);
-            // get player
-            if (((Player*)pCaster)->GetQuestStatus(QUEST_PLAGUED_LANDS) == QUEST_STATUS_INCOMPLETE)
+            Player* pPlayer = static_cast<Player*>(pCaster);
+            if (pPlayer->GetQuestStatus(QUEST_PLAGUED_LANDS) == QUEST_STATUS_INCOMPLETE)
             {
-                ((Player*)pCaster)->KilledMonsterCredit(m_creature->GetEntry(), m_creature->GetObjectGuid());
-                m_creature->GetMotionMaster()->MoveFollow(pCaster, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
-            }
-            else                                // Something unexpected happened
-                m_creature->ForcedDespawn(1000);
+                pPlayer->KilledMonsterCredit(NPC_CAPTURED_RABID_THISTLE_BEAR, ObjectGuid());
 
-            // No need to check any more
-            m_uiCheckTimer = 0;
-            // Despawn after a while (delay guesswork)
-            m_uiDespawnTimer = 3 * MINUTE * IN_MILLISECONDS;
+                // Summon a temporary docile captured bear that follows the player
+                if (Creature* pCaptured = pPlayer->SummonCreature(
+                    NPC_CAPTURED_RABID_THISTLE_BEAR,
+                    m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation(),
+                    TEMPSPAWN_TIMED_OR_DEAD_DESPAWN, 3 * MINUTE * IN_MILLISECONDS))
+                {
+                    pCaptured->GetMotionMaster()->MoveFollow(pPlayer, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
+                }
+
+                // Despawn the wild bear so its world spawn respawns normally
+                m_creature->CombatStop(true);
+                m_creature->ForcedDespawn();
+            }
         }
     }
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (m_uiDespawnTimer && !m_creature->IsInCombat())
-        {
-            if (m_uiDespawnTimer <= uiDiff)
-            {
-                m_creature->ForcedDespawn();
-                return;
-            }
-            m_uiDespawnTimer -= uiDiff;
-        }
-
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
@@ -648,6 +612,57 @@ struct npc_rabid_bearAI : public ScriptedAI
 UnitAI* GetAI_npc_rabid_bear(Creature* pCreature)
 {
     return new npc_rabid_bearAI(pCreature);
+}
+
+/*######
+## npc_captured_rabid_bear
+######*/
+
+struct npc_captured_rabid_bearAI : public ScriptedAI
+{
+    npc_captured_rabid_bearAI(Creature* pCreature) : ScriptedAI(pCreature)
+    {
+        m_uiCheckTimer = 2000;
+        Reset();
+    }
+
+    uint32 m_uiCheckTimer;
+
+    void Reset() override {}
+
+    void MoveInLineOfSight(Unit* pWho) override
+    {
+        if (pWho->GetTypeId() == TYPEID_UNIT && pWho->GetEntry() == NPC_THARNARIUN_TREETENDER &&
+            pWho->IsWithinDist(m_creature, 2 * INTERACTION_DISTANCE, false))
+        {
+            m_creature->GetMotionMaster()->MoveIdle();
+            m_creature->ForcedDespawn(1000);
+            return;
+        }
+
+        ScriptedAI::MoveInLineOfSight(pWho);
+    }
+
+    void UpdateAI(const uint32 uiDiff) override
+    {
+        if (m_uiCheckTimer <= uiDiff)
+        {
+            Player* pPlayer = m_creature->GetMap()->GetPlayer(m_creature->GetSpawnerGuid());
+            if (!pPlayer || !pPlayer->IsAlive())
+            {
+                m_creature->ForcedDespawn(1000);
+                return;
+            }
+            m_uiCheckTimer = 2000;
+        }
+        else
+            m_uiCheckTimer -= uiDiff;
+    }
+};
+
+UnitAI* GetAI_npc_captured_rabid_bear(Creature* pCreature)
+{
+    return new npc_captured_rabid_bearAI(pCreature);
 }
 
 /*######
@@ -917,6 +932,11 @@ void AddSC_darkshore()
     pNewScript = new Script;
     pNewScript->Name = "npc_rabid_bear";
     pNewScript->GetAI = &GetAI_npc_rabid_bear;
+    pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "npc_captured_rabid_bear";
+    pNewScript->GetAI = &GetAI_npc_captured_rabid_bear;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;

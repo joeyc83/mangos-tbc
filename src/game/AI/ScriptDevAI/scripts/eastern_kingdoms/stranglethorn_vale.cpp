@@ -147,11 +147,15 @@ struct mob_colonel_kurzenAI : public CombatAI
         {
             case KURZEN_ACTION_VANISH:
             {
-                SetMeleeEnabled(false);
                 m_creature->SetCombatOnlyStealth(true); // must be before smoke bomb
-                DoCastSpellIfCan(nullptr, SPELL_SMOKE_BOMB);
-                ResetCombatAction(KURZEN_ACTION_GAROTTE, urand(2000, 2500));
-                DisableCombatAction(action);
+                if (DoCastSpellIfCan(nullptr, SPELL_SMOKE_BOMB) == CAST_OK)
+                {
+                    SetMeleeEnabled(false);
+                    ResetCombatAction(KURZEN_ACTION_GAROTTE, urand(2000, 2500));
+                    DisableCombatAction(action);
+                }
+                else
+                    m_creature->SetCombatOnlyStealth(false);
                 break;
             }
             case KURZEN_ACTION_GAROTTE:

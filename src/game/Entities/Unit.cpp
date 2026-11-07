@@ -8809,7 +8809,47 @@ void Unit::UpdateVisibilityAndView()
         }
     }
 
-    GetMap()->AddUpdateMovementObject(this);
+    if (m_Visibility == VISIBILITY_GROUP_NO_DETECT)
+    {
+        if (!m_attackers.empty())
+        {
+            AttackerSet attackers = m_attackers;
+            for (Unit* attacker : attackers)
+            {
+                if (m_attackers.find(attacker) == m_attackers.end())
+                    continue;
+
+                WorldObject const* viewPoint = attacker->IsPlayer() ? static_cast<Player*>(attacker)->GetCamera().GetBody() : attacker;
+                if (!this->IsVisibleForOrDetect(attacker, viewPoint, false))
+                    attacker->AttackStop(true, true);
+            }
+        }
+
+        auto& clientGuids = GetClientGuidsIAmAt();
+        GuidSet oor;
+        for (auto itr = clientGuids.begin(); itr != clientGuids.end();)
+        {
+            if (Player* client = GetMap()->GetPlayer(*itr))
+            {
+                if (!this->isVisibleForInState(client, client->GetCamera().GetBody(), false))
+                {
+                    if (IsCreature())
+                        client->BeforeVisibilityDestroy(static_cast<Creature*>(this));
+                    client->RemoveAtClient(this, true);
+                    oor.insert(*itr);
+                    itr = clientGuids.erase(itr);
+                    continue;
+                }
+            }
+
+            ++itr;
+        }
+
+        if (!oor.empty())
+            GetMap()->AddUpdateRemoveObject(oor, this->GetObjectGuid());
+    }
+
+    GetMap()->AddUpdateCreateObject(this);
     ScheduleAINotify(0);
 }
 

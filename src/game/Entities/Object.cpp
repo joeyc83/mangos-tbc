@@ -462,7 +462,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                             for (QuestRelationsMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
                             {
                                 Quest const* pQuest = sObjectMgr.GetQuestTemplate(itr->second);
-                                if (target->CanSeeStartQuest(pQuest))
+                                if (target->CanSeeStartQuest(pQuest, static_cast<Creature const*>(this)))
                                 {
                                     appendValue &= ~UNIT_NPC_FLAG_FLIGHTMASTER;
                                     break;

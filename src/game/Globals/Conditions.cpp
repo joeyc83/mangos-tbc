@@ -407,7 +407,16 @@ bool inline ConditionEntry::Evaluate(WorldObject const* target, Map const* map, 
         }
         case CONDITION_LAST_WAYPOINT:
         {
-            uint32 lastReachedWp = ((Creature*)source)->GetMotionMaster()->getLastReachedWaypoint();
+            Creature const* creature = nullptr;
+            if (target && target->IsCreature())
+                creature = static_cast<Creature const*>(target);
+            else if (source && source->IsCreature())
+                creature = static_cast<Creature const*>(source);
+
+            if (!creature)
+                return false;
+
+            uint32 lastReachedWp = creature->GetMotionMaster()->getLastReachedWaypoint();
             switch (m_value2)
             {
                 case 0: return m_value1 == lastReachedWp;

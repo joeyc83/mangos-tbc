@@ -139,8 +139,9 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPacket& recv_data)
     Quest const* qInfo = sObjectMgr.GetQuestTemplate(quest);
     if (qInfo)
     {
+        WorldObject* pWorldObject = (pObject && pObject->isType(TYPEMASK_WORLDOBJECT)) ? static_cast<WorldObject*>(pObject) : nullptr;
         // prevent cheating
-        if (!GetPlayer()->CanTakeQuest(qInfo, true))
+        if (!GetPlayer()->CanTakeQuest(qInfo, true, pWorldObject))
         {
             _player->GetPlayerMenu()->CloseGossip();
             _player->ClearDividerGuid();
@@ -168,7 +169,7 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPacket& recv_data)
                         if (!pPlayer || pPlayer == _player || !pPlayer->IsInWorld()) // not self
                             continue;
 
-                        if (pPlayer->CanTakeQuest(qInfo, true))
+                        if (pPlayer->CanTakeQuest(qInfo, true, pWorldObject))
                         {
                             pPlayer->SetDividerGuid(_player->GetObjectGuid());
 
@@ -647,6 +648,8 @@ uint32 WorldSession::getDialogStatus(const Player* pPlayer, const Object* questg
     QuestRelationsMapBounds rbounds;                        // QuestRelations (quest-giver)
     QuestRelationsMapBounds irbounds;                       // InvolvedRelations (quest-finisher)
 
+    WorldObject const* pQuestGiver = (questgiver->GetTypeId() == TYPEID_UNIT || questgiver->GetTypeId() == TYPEID_GAMEOBJECT) ? static_cast<WorldObject const*>(questgiver) : nullptr;
+
     switch (questgiver->GetTypeId())
     {
         case TYPEID_UNIT:
@@ -681,7 +684,7 @@ uint32 WorldSession::getDialogStatus(const Player* pPlayer, const Object* questg
 
         if (status == QUEST_STATUS_COMPLETE && !pPlayer->GetQuestRewardStatus(quest_id))
             dialogStatusNew = pQuest->IsRepeatable() && !pQuest->IsDailyOrWeekly() ? DIALOG_STATUS_REWARD_REP : DIALOG_STATUS_REWARD;
-        else if (pQuest->IsAutoComplete() && pPlayer->CanTakeQuest(pQuest, false))
+        else if (pQuest->IsAutoComplete() && pPlayer->CanTakeQuest(pQuest, false, pQuestGiver))
             dialogStatusNew = pQuest->IsRepeatable() ? pQuest->IsDailyOrWeekly() ? DIALOG_STATUS_AVAILABLE_REP : DIALOG_STATUS_REWARD_REP : DIALOG_STATUS_AVAILABLE;
         else if (status == QUEST_STATUS_INCOMPLETE)
             dialogStatusNew = DIALOG_STATUS_INCOMPLETE;
@@ -704,7 +707,7 @@ uint32 WorldSession::getDialogStatus(const Player* pPlayer, const Object* questg
 
         if (status == QUEST_STATUS_NONE)                    // For all other cases the mark is handled either at some place else, or with involved-relations already
         {
-            if (pPlayer->CanSeeStartQuest(pQuest))
+            if (pPlayer->CanSeeStartQuest(pQuest, pQuestGiver))
             {
                 if (pPlayer->SatisfyQuestLevel(pQuest, false))
                 {

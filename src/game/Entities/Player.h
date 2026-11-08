@@ -1260,8 +1260,8 @@ class Player : public Unit
         bool IsCurrentQuest(uint32 quest_id, uint8 completed_or_not = 0) const; // taken and not yet rewarded
 
         Quest const* GetNextQuest(ObjectGuid guid, Quest const* pQuest) const;
-        bool CanSeeStartQuest(Quest const* pQuest) const;
-        bool CanTakeQuest(Quest const* pQuest, bool msg) const;
+        bool CanSeeStartQuest(Quest const* pQuest, WorldObject const* questGiver = nullptr) const;
+        bool CanTakeQuest(Quest const* pQuest, bool msg, WorldObject const* questGiver = nullptr) const;
         bool CanAddQuest(Quest const* pQuest, bool msg) const;
         bool CanCompleteQuest(uint32 quest_id) const;
         bool CanCompleteRepeatableQuest(Quest const* pQuest) const;
@@ -1278,7 +1278,7 @@ class Player : public Unit
         void FailQuestForGroup(uint32 questId);
         void FailQuestsOnDeath();
         bool SatisfyQuestSkill(Quest const* qInfo, bool msg) const;
-        bool SatisfyQuestCondition(Quest const* qInfo, bool msg) const;
+        bool SatisfyQuestCondition(Quest const* qInfo, bool msg, WorldObject const* questGiver = nullptr) const;
         bool SatisfyQuestLevel(Quest const* qInfo, bool msg) const;
         bool SatisfyQuestLog(bool msg) const;
         bool SatisfyQuestPreviousQuest(Quest const* qInfo, bool msg) const;

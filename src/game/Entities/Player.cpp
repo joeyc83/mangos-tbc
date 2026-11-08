@@ -12779,9 +12779,11 @@ void Player::PrepareQuestMenu(ObjectGuid guid) const
     QuestRelationsMapBounds rbounds;
     QuestRelationsMapBounds irbounds;
 
+    WorldObject* pQuestGiver = nullptr;
     // pets also can have quests
     if (Creature* pCreature = GetMap()->GetAnyTypeCreature(guid))
     {
+        pQuestGiver = pCreature;
         rbounds = sObjectMgr.GetCreatureQuestRelationsMapBounds(pCreature->GetEntry());
         irbounds = sObjectMgr.GetCreatureQuestInvolvedRelationsMapBounds(pCreature->GetEntry());
     }
@@ -12794,6 +12796,7 @@ void Player::PrepareQuestMenu(ObjectGuid guid) const
 
         if (GameObject* pGameObject = _map->GetGameObject(guid))
         {
+            pQuestGiver = pGameObject;
             rbounds = sObjectMgr.GetGOQuestRelationsMapBounds(pGameObject->GetEntry());
             irbounds = sObjectMgr.GetGOQuestInvolvedRelationsMapBounds(pGameObject->GetEntry());
         }
@@ -12834,9 +12837,9 @@ void Player::PrepareQuestMenu(ObjectGuid guid) const
 
         QuestStatus status = GetQuestStatus(quest_id);
 
-        if (pQuest->IsAutoComplete() && CanTakeQuest(pQuest, false))
+        if (pQuest->IsAutoComplete() && CanTakeQuest(pQuest, false, pQuestGiver))
             qm.AddMenuItem(quest_id, DIALOG_STATUS_REWARD_REP);
-        else if (status == QUEST_STATUS_NONE && CanTakeQuest(pQuest, false))
+        else if (status == QUEST_STATUS_NONE && CanTakeQuest(pQuest, false, pQuestGiver))
             qm.AddMenuItem(quest_id, DIALOG_STATUS_AVAILABLE);
     }
 }
@@ -13001,9 +13004,9 @@ Quest const* Player::GetNextQuest(ObjectGuid guid, Quest const* pQuest) const
  * Basic Quest-taking requirements: Class, Race, Skill, Quest-Line, ...
  * Check if the quest-level is not too high (related config value CONFIG_INT32_QUEST_HIGH_LEVEL_HIDE_DIFF)
  */
-bool Player::CanSeeStartQuest(Quest const* pQuest) const
+bool Player::CanSeeStartQuest(Quest const* pQuest, WorldObject const* questGiver) const
 {
-    if (SatisfyQuestClass(pQuest, false) && SatisfyQuestRace(pQuest, false) && SatisfyQuestSkill(pQuest, false) && SatisfyQuestCondition(pQuest, false) &&
+    if (SatisfyQuestClass(pQuest, false) && SatisfyQuestRace(pQuest, false) && SatisfyQuestSkill(pQuest, false) && SatisfyQuestCondition(pQuest, false, questGiver) &&
             SatisfyQuestExclusiveGroup(pQuest, false) && SatisfyQuestReputation(pQuest, false) &&
             SatisfyQuestPreviousQuest(pQuest, false) && SatisfyQuestBreadcrumbQuest(pQuest, false) && SatisfyQuestDependentBreadcrumbQuests(pQuest, false) &&
             SatisfyQuestNextChain(pQuest, false) && SatisfyQuestPrevChain(pQuest, false) &&
@@ -13020,11 +13023,11 @@ bool Player::CanSeeStartQuest(Quest const* pQuest) const
     return false;
 }
 
-bool Player::CanTakeQuest(Quest const* pQuest, bool msg) const
+bool Player::CanTakeQuest(Quest const* pQuest, bool msg, WorldObject const* questGiver) const
 {
     return SatisfyQuestStatus(pQuest, msg) && SatisfyQuestExclusiveGroup(pQuest, msg) &&
            SatisfyQuestClass(pQuest, msg) && SatisfyQuestRace(pQuest, msg) && SatisfyQuestLevel(pQuest, msg) &&
-           SatisfyQuestSkill(pQuest, msg) && SatisfyQuestCondition(pQuest, msg) && SatisfyQuestReputation(pQuest, msg) &&
+           SatisfyQuestSkill(pQuest, msg) && SatisfyQuestCondition(pQuest, msg, questGiver) && SatisfyQuestReputation(pQuest, msg) &&
            SatisfyQuestPreviousQuest(pQuest, msg) && SatisfyQuestTimed(pQuest, msg) &&
            SatisfyQuestNextChain(pQuest, msg) && SatisfyQuestPrevChain(pQuest, msg) &&
            SatisfyQuestBreadcrumbQuest(pQuest, msg) && SatisfyQuestDependentBreadcrumbQuests(pQuest, msg) &&
@@ -13651,11 +13654,11 @@ bool Player::SatisfyQuestSkill(Quest const* qInfo, bool msg) const
     return true;
 }
 
-bool Player::SatisfyQuestCondition(Quest const* qInfo, bool msg) const
+bool Player::SatisfyQuestCondition(Quest const* qInfo, bool msg, WorldObject const* questGiver) const
 {
     if (uint32 conditionId = qInfo->GetRequiredCondition())
     {
-        bool result = sObjectMgr.IsConditionSatisfied(conditionId, this, GetMap(), nullptr, CONDITION_FROM_QUEST);
+        bool result = sObjectMgr.IsConditionSatisfied(conditionId, this, GetMap(), questGiver, CONDITION_FROM_QUEST);
 
         if (!result && msg)
             SendCanTakeQuestResponse(INVALIDREASON_DONT_HAVE_REQ);

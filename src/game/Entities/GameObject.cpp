@@ -1207,7 +1207,7 @@ bool GameObject::ActivateToQuest(Player* pTarget) const
             {
                 const Quest* qInfo = sObjectMgr.GetQuestTemplate(itr->second);
 
-                if (pTarget->CanTakeQuest(qInfo, false))
+                if (pTarget->CanTakeQuest(qInfo, false, this))
                     return true;
             }
 

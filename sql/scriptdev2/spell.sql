@@ -551,6 +551,7 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (31298,'spell_anetheron_sleep'),
 (42201,'spell_eternal_silence'),
 (41910,'spell_alar_phoenix_ember_blast'),
+(30629,'spell_magtheridon_debris_targeting'),
 (30632,'spell_magtheridon_debris'),
 (32286,'spell_focus_target_visual'),
 (32301,'spell_ping_shirrak'),
@@ -790,7 +791,11 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (35268,'spell_raging_flames_inferno'),
 (39346,'spell_raging_flames_inferno'),
 (34168,'spell_spore_cloud_underbog'),
-(33133,'spell_infinite_transform');
+(33133,'spell_infinite_transform'),
+(33937, 'spell_stun_phase_unit'),
+(34016, 'spell_stun_phase_unit'),
+(34023, 'spell_stun_phase_unit'),
+(34024, 'spell_stun_phase_unit');
 
 -- Wotlk
 INSERT INTO spell_scripts(Id, ScriptName) VALUES

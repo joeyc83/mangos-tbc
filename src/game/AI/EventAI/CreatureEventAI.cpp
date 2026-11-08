@@ -24,6 +24,7 @@
 #include "Chat/Chat.h"
 #include "Tools/Language.h"
 #include "MotionGenerators/MovementGenerator.h"
+#include "Spells/SpellAuras.h"
 
 bool CreatureEventAIHolder::UpdateRepeatTimer(Creature* creature, uint32 repeatMin, uint32 repeatMax)
 {
@@ -956,7 +957,7 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
             if (hasCombatMovement && action.combat_movement.melee && m_creature->IsInCombat() && m_creature->GetVictim())
                 m_creature->SendMeleeAttackStart(*m_creature->GetVictim());
             else if (action.combat_movement.melee && m_creature->IsInCombat() && m_creature->GetVictim())
-                m_creature->SendMeleeAttackStop(*m_creature->GetVictim());
+                m_creature->SendMeleeAttackStop(m_creature->GetVictim());
             break;
         }
         case ACTION_T_SET_PHASE:
@@ -2083,6 +2084,4 @@ void CreatureEventAI::MovementInform(uint32 motionType, uint32 pointId)
         }
     }
     ProcessEvents();
-
-    CreatureAI::MovementInform(motionType, pointId);
 }

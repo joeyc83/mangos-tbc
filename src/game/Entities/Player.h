@@ -59,6 +59,7 @@ class DungeonPersistentState;
 class Spell;
 class Item;
 struct FactionTemplateEntry;
+struct VendorItem;
 
 #ifdef BUILD_DEPRECATED_PLAYERBOT
 #include "PlayerBot/Base/PlayerbotMgr.h"
@@ -848,7 +849,7 @@ class TradeData
     public:                                                 // constructors
         TradeData(Player* player, Player* trader) :
             m_player(player),  m_trader(trader), m_accepted(false), m_acceptProccess(false),
-            m_money(0), m_spell(0) {}
+            m_money(0), m_spell(0), m_clientStateIndex(1), m_serverStateIndex(1), m_windowOpen(false) {}
 
         Player* GetTrader() const { return m_trader; }
         TradeData* GetTraderData() const;
@@ -864,6 +865,13 @@ class TradeData
 
         bool IsAccepted() const { return m_accepted; }
         bool IsInAcceptProcess() const { return m_acceptProccess; }
+
+        uint32 GetClientStateIndex() const { return m_clientStateIndex; }
+        void UpdateClientStateIndex() { ++m_clientStateIndex; }
+        uint32 GetServerStateIndex() const { return m_serverStateIndex; }
+
+        bool IsWindowOpen() const { return m_windowOpen; }
+        void SetWindowOpen() { m_windowOpen = true; }
 
         void SetItem(TradeSlots slot, Item* item);
         void SetSpell(uint32 spell_id, Item* castItem = nullptr);
@@ -890,6 +898,12 @@ class TradeData
         ObjectGuid m_spellCastItem;                         // applied spell casted by item use
 
         ObjectGuid m_items[TRADE_SLOT_COUNT];               // traded itmes from m_player side including non-traded slot
+
+        // Both start at 1, like the client's counters when the trade window opens
+        uint32     m_clientStateIndex;                      // requests from m_player's client to change its offer, refused or not; it ignores an update of its own offer with a lower index
+        uint32     m_serverStateIndex;                      // version of m_player's offer, raised by every change; the trader's client sends it back in CMSG_ACCEPT_TRADE
+
+        bool       m_windowOpen;                            // the trade window was opened on both clients
 };
 
 class Player : public Unit
@@ -1191,8 +1205,8 @@ class Player : public Unit
 
         uint32 GetMaxKeyringSize() const { return KEYRING_SLOT_END - KEYRING_SLOT_START; }
         void SendEquipError(InventoryResult msg, Item* pItem = nullptr, Item* pItem2 = nullptr, uint8 slot = 0, uint32 itemid = 0) const;
-        void SendBuyError(BuyResult msg, Creature* pCreature, uint32 item, uint32 param) const;
-        void SendSellError(SellResult msg, Creature* pCreature, ObjectGuid itemGuid, uint32 param) const;
+        void SendBuyError(BuyResult msg, Creature* pCreature, uint32 vendorSlot) const;
+        void SendSellError(SellResult msg, Creature* pCreature, ObjectGuid itemGuid) const;
         void SendOpenContainer(ObjectGuid itemGuid);
         void AddWeaponProficiency(uint32 newflag) { m_WeaponProficiency |= newflag; }
         void AddArmorProficiency(uint32 newflag) { m_ArmorProficiency |= newflag; }
@@ -1204,10 +1218,12 @@ class Player : public Unit
             return mainItem && mainItem->GetProto()->InventoryType == INVTYPE_2HWEAPON;
         }
         void SendNewItem(Item* item, uint32 count, bool received, bool created, bool broadcast = false, bool showInChat = true);
+        bool CanSeeVendorItem(Creature const* vendor, VendorItem const* vendorItem, ItemPrototype const* proto) const;
         bool BuyItemFromVendor(ObjectGuid vendorGuid, uint32 item, uint8 count, uint8 bag, uint8 slot);
 
         float GetReputationPriceDiscount(Creature const* creature) const;
         float GetReputationPriceDiscount(FactionTemplateEntry const* factionTemplate) const;
+        float GetRepairPriceMultiplier(Creature const* vendor) const;
 
         Player* GetTrader() const { return m_trade ? m_trade->GetTrader() : nullptr; }
         TradeData* GetTradeData() const { return m_trade; }
@@ -2077,7 +2093,7 @@ class Player : public Unit
         bool isMovingOrTurning() const { return m_movementInfo.HasMovementFlag(movementOrTurningFlagsMask); }
 
         bool CanSwim() const override { return true; }
-        bool CanFly() const override { return m_movementInfo.HasMovementFlag(MOVEFLAG_FLYING); }
+        bool CanFly() const override { return m_movementInfo.HasMovementFlag(MOVEFLAG_CAN_FLY); }
         bool CanWalk() const override { return true; }
         bool IsFreeFlying() const { return HasAuraType(SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED) || HasAuraType(SPELL_AURA_FLY); }
         bool IsSwimming() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING); }

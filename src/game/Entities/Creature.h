@@ -52,7 +52,7 @@ enum CreatureFlagsExtra
     CREATURE_EXTRA_FLAG_NO_PARRY_HASTEN        = 0x00000008,       // 8 creature can't counter-attack at parry
     CREATURE_EXTRA_FLAG_NO_BLOCK               = 0x00000010,       // 16 creature can't block
     CREATURE_EXTRA_FLAG_RUN_DURING_WANDER      = 0x00000020,       // 32 15% chance during wander (random movement)
-    CREATURE_EXTRA_FLAG_UNUSED2                = 0x00000040,       // 64
+    CREATURE_EXTRA_FLAG_SPECIAL                = 0x00000040,       // 64 Loaded into the world on start
     CREATURE_EXTRA_FLAG_INVISIBLE              = 0x00000080,       // 128 creature is always invisible for player (mostly trigger creatures)
     CREATURE_EXTRA_FLAG_UNUSED3                = 0x00000100,       // 256
     CREATURE_EXTRA_FLAG_AGGRO_ZONE             = 0x00000200,       // 512 creature sets itself in combat with zone on aggro
@@ -238,6 +238,11 @@ struct CreatureInfo
     bool HasFlag(CreatureFlagsExtra flags) const
     {
         return bool(ExtraFlags & flags);
+    }
+
+    bool IsSpecialActive() const
+    {
+        return IsLargeOrBiggerCreature() || HasFlag(CREATURE_EXTRA_FLAG_SPECIAL);
     }
 };
 
@@ -499,7 +504,7 @@ struct TrainerSpell
     TrainerSpell() : spell(0), spellCost(0), reqSkill(0), reqSkillValue(0), reqLevel(0), learnedSpell(0), conditionId(0), isProvidedReqLevel(false) {}
 
     TrainerSpell(uint32 _spell, uint32 _spellCost, uint32 _reqSkill, uint32 _reqSkillValue, uint32 _reqLevel, uint32 _learnedspell, bool _isProvidedReqLevel, uint32 _conditionId)
-        : spell(_spell), spellCost(_spellCost), reqSkill(_reqSkill), reqSkillValue(_reqSkillValue), reqLevel(_reqLevel), learnedSpell(_learnedspell), conditionId(_conditionId), isProvidedReqLevel(_isProvidedReqLevel) {}
+        : spell(_spell), spellCost(_spellCost), reqSkill(_reqSkill), reqSkillValue(_reqSkillValue), reqLevel(_reqLevel), learnedSpell{ _learnedspell }, conditionId(_conditionId), isProvidedReqLevel(_isProvidedReqLevel) {}
 
     uint32 spell;
     uint32 spellCost;

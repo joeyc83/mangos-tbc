@@ -2185,23 +2185,185 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, bool targ
                 }
             }
 
+            uint32 mapId = m_caster->GetMapId();
             uint32 zone, area;
             m_caster->GetTerrain()->GetZoneAndAreaId(zone, area, x, y, z);
-            int32 zone_skill = sObjectMgr.GetFishingBaseSkillLevel(area);
-            if (!zone_skill)
-                zone_skill = sObjectMgr.GetFishingBaseSkillLevel(zone);
-
-            if (!zone_skill)
+            // vanilla brackets - 0, 55, 130, 205, 330
+            // tbc brackets - 305, 355, 380, 430
+            uint32 minimumRequiredSkill = 500; // catch setting for missing cases so its noticable
+            // Duplicate logic of GetFishingBaseSkillLevel, kept in core for research reasons until all instances are rechecked
+            switch (mapId)
             {
-                sLog.outErrorDb("Fishable areaId %u is not properly defined in `skill_fishing_base_level`.", area ? area : zone);
-                zone_skill = 500; // catch setting for missing cases
+                case 0:
+                    switch (zone)
+                    {
+                        case 1: // dun morogh
+                        case 12: // elwynn
+                        case 38: // loch modan
+                        case 40: // westfall
+                        case 85: // tirisfal
+                        case 130: // silverpine
+                            minimumRequiredSkill = 0;
+                            break;
+                        case 10: // duskwood
+                        case 11: // wetlands
+                        case 44: // redridge
+                        case 267: // hillsbrad
+                        case 1519: // stormwind
+                            minimumRequiredSkill = 55;
+                            break;
+                        case 33: // stranglethorn
+                        case 45: // arathi
+                            minimumRequiredSkill = 130;
+                            break;
+                        case 28: // western plaguelands
+                        case 47: // hinterlands
+                            minimumRequiredSkill = 205;
+                            break;
+                        case 41: // deadwind
+                        case 139: // eastern plaguelands
+                            minimumRequiredSkill = 330;
+                            break;
+                    }
+                    break;
+                case 1:
+                    switch (zone)
+                    {
+                        case 14: // durotar
+                        case 17: // barrens
+                        case 141: // teldrassil
+                        case 148: // darkshore
+                        case 215: // mulgore
+                        case 1657: // darnassus
+                            minimumRequiredSkill = 0;
+                            break;
+                        case 331: // ashenvale
+                        case 406: // stonetalon
+                            minimumRequiredSkill = 55;
+                            break;
+                        case 15: // dustwallow
+                        case 405: // desolace
+                            minimumRequiredSkill = 130;
+                            break;
+                        case 357: // feralas
+                            switch (area)
+                            {
+                                case 1112: // jademir lake
+                                    minimumRequiredSkill = 330;
+                                    break;
+                                default:
+                                    minimumRequiredSkill = 205;
+                                    break;
+                            }
+                            break;
+                        case 440: // tanaris
+                            minimumRequiredSkill = 205;
+                            break;
+                        case 16: // azshara
+                        case 618: // winterspring
+                            minimumRequiredSkill = 330;
+                            break;
+                    }
+                    break;
+                case 43: // wailing caverns
+                case 48: // blackfathom
+                    minimumRequiredSkill = 55;
+                    break;
+                case 189: // scarlet monastery
+                case 349: // maraudon
+                    minimumRequiredSkill = 205;
+                    break;
+                case 289: // scholomance
+                case 309: // zulgurub
+                case 329: // stratholme
+                case 429: // dire maul
+                    minimumRequiredSkill = 330;
+                    break;
+                case 530:
+                {
+                    uint32 v_map = GetVirtualMapForMapAndZone(mapId, zone);
+                    MapEntry const* mapEntry = sMapStore.LookupEntry(v_map);
+                    if (!mapEntry || mapEntry->addon < 1)
+                    {
+                        minimumRequiredSkill = 0; // belf/draenei starter zones
+                        break;
+                    }
+
+                    switch (zone)
+                    {
+                        case 3521: // zangarmarsh
+                            switch (area)
+                            {
+                                case 3655:
+                                case 3659:
+                                default:
+                                    minimumRequiredSkill = 305;
+                                    break;
+                                case 3653:
+                                case 3656:
+                                case 3720:
+                                    minimumRequiredSkill = 355;
+                                    break;
+                            }
+                            break;
+                        case 3519: // terokkar
+                            switch (area)
+                            {
+                                case 3680:
+                                case 3690:
+                                case 3691:
+                                case 3692:
+                                case 3693:
+                                case 3975:
+                                    minimumRequiredSkill = 405;
+                                    break;
+                                default:
+                                    minimumRequiredSkill = 380;
+                                    break;
+                            }
+                            break;
+                        case 3518: // nagrand
+                            switch (area)
+                            {
+                                case 3621: // lake sunspring
+                                    minimumRequiredSkill = 405;
+                                    break;
+                                default:
+                                    minimumRequiredSkill = 355;
+                                    break;
+                            }
+                            break;
+                        case 3523: // netherstorm
+                            minimumRequiredSkill = 380;
+                            break;
+                        default:
+                            minimumRequiredSkill = 305;
+                            break;
+                    }
+                    break;
+                }
+                case 545: // Steamvaults
+                case 546: // Underbog -- TODO: Verify
+                case 547: // Slave Pens -- TODO: Verify
+                    result = SPELL_FAILED_NO_FISH;
+                    break;
+                // these are unverified - needs more data
+                case 534: // Hyjal Summit
+                case 548: // SSC
+                case 560: // OHF
+                case 568: // ZA
+                case 580: // SWP
+                case 585: // MgT
+                    minimumRequiredSkill = 405;
+                    break;
             }
 
-            uint32 minimumRequiredSkill = zone_skill < 0 ? 0 : zone_skill;
-
-            uint32 fishingSkill = m_caster->IsPlayer() ? static_cast<Player*>(m_caster)->GetSkillValue(SKILL_FISHING) : 0;
-            if (fishingSkill < minimumRequiredSkill)
-                result = SPELL_FAILED_LOW_CASTLEVEL;
+            if (result == SPELL_CAST_OK)
+            {
+                uint32 fishingSkill = m_caster->IsPlayer() ? static_cast<Player*>(m_caster)->GetSkillValue(SKILL_FISHING) : 0;
+                if (fishingSkill < minimumRequiredSkill)
+                    result = SPELL_FAILED_LOW_CASTLEVEL;
+            }
 
             if (result != SPELL_CAST_OK)
             {
@@ -2385,9 +2547,37 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, bool targ
             UnitList tempTargetUnitMap;
             SQLMultiStorage::SQLMSIteratorBounds<SpellTargetEntry> bounds = sSpellScriptTargetStorage.getBounds<SpellTargetEntry>(m_spellInfo->Id);
 
-            // fill real target list if no spell script target defined
-            FillAreaTargets(bounds.first != bounds.second ? tempTargetUnitMap : tempUnitList,
-                            radius, cone, PUSH_SRC_CENTER, SPELL_TARGETS_ALL);
+            bool stringIdFound = false;
+            if (radius == 50000.00f) // Testing hypothesis - enables fetching beyond grid search - confirmed for 33937
+            {
+                for (SQLMultiStorage::SQLMultiSIterator<SpellTargetEntry> i_spellST = bounds.first; i_spellST != bounds.second; ++i_spellST)
+                {
+                    SpellTargetEntry const* spellST = (*i_spellST);
+                    if (spellST->CanNotHitWithSpellEffect(effIndex))
+                        continue;
+
+                    switch (spellST->type)
+                    {
+                        case SPELL_TARGET_TYPE_STRING_ID:
+                        {
+                            stringIdFound = true;
+                            std::vector<Creature*> const* creatures = m_caster->GetMap()->GetCreatures(spellST->targetEntry);
+                            if (creatures)
+                            {
+                                for (Creature* creature : *creatures)
+                                    tempTargetUnitMap.push_back(creature);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!stringIdFound) // old default to keep everything working
+            {
+                // fill real target list if no spell script target defined
+                FillAreaTargets(bounds.first != bounds.second ? tempTargetUnitMap : tempUnitList, radius, cone, PUSH_SRC_CENTER, SPELL_TARGETS_ALL);
+            }
 
             if (!tempTargetUnitMap.empty())
                 CheckSpellScriptTargets(bounds, tempTargetUnitMap, tempUnitList, effIndex);
@@ -3068,6 +3258,7 @@ void Spell::CheckSpellScriptTargets(SQLMultiStorage::SQLMSIteratorBounds<SpellTa
                     fail = target->GetDbGuid() != spellST->targetEntry;
                     break;
                 case SPELL_TARGET_TYPE_STRING_ID:
+                    fail = !target->HasStringId(spellST->targetEntry);
                     break;
                 default:
                     fail = target->GetEntry() != spellST->targetEntry;
@@ -3090,8 +3281,7 @@ void Spell::CheckSpellScriptTargets(SQLMultiStorage::SQLMSIteratorBounds<SpellTa
                     targetUnitMap.push_back(target);
                     break;
                 case SPELL_TARGET_TYPE_STRING_ID:
-                    if (target->HasStringId(spellST->targetEntry))
-                        targetUnitMap.push_back(target);
+                    targetUnitMap.push_back(target);
                     break;
                 default:
                     break;
@@ -4961,6 +5151,9 @@ SpellCastResult Spell::CheckCast(bool strict)
     {
         if (m_triggeredByAuraSpell)
             return SPELL_FAILED_DONT_REPORT;
+        // only SPELL_FAILED_NOT_READY lets the client release a cooldown it holds until an event
+        else if (m_CastItem && !m_spellInfo->HasAttribute(SPELL_ATTR_COOLDOWN_ON_EVENT))
+            return SPELL_FAILED_ITEM_NOT_READY;
         else
             return SPELL_FAILED_NOT_READY;
     }

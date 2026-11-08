@@ -146,8 +146,8 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
     m_isInvisible(false), m_ignoreMMAP(false), m_forceAttackingCapability(false),
     m_settings(this),
     m_countSpawns(false),
-    m_creatureGroup(nullptr), m_imposedCooldown(false), m_healthMultiplier(1.f), m_damageMultiplier(1.f), m_baseAP(0), m_baseRAP(0),
-    m_creatureInfo(nullptr), m_mountInfo(nullptr), m_delayedPetSpells(false),
+    m_creatureGroup(nullptr), m_imposedCooldown(false),  m_delayedPetSpells(false), m_healthMultiplier(1.f), m_damageMultiplier(1.f), m_baseAP(0), m_baseRAP(0),
+    m_creatureInfo(nullptr), m_mountInfo(nullptr),
     m_combatOnlyStealth(false)
 {
     m_valuesCount = UNIT_END;
@@ -1680,6 +1680,9 @@ void Creature::TriggerDelayedPetSpells()
 
 bool Creature::CreateFromProto(uint32 dbGuid, uint32 guidlow, CreatureInfo const* cinfo, const CreatureData* data /*=nullptr*/, GameEventCreatureData const* eventData /*=nullptr*/)
 {
+    if (!guidlow)                                           // no free map guid counter, already logged
+        return false;
+
     m_originalEntry = cinfo->Entry;
 
     uint32 newEntry = cinfo->Entry;
@@ -1748,7 +1751,7 @@ bool Creature::LoadFromDB(uint32 dbGuid, Map* map, uint32 newGuid, uint32 forced
     }
 
     if (dynguid || newGuid == 0)
-        newGuid = map->GenerateLocalLowGuid(cinfo->GetHighGuid());
+        newGuid = map->GenerateLocalLowGuid(cinfo->GetHighGuid(), cinfo->Entry);
 
     CreatureCreatePos pos(map, data->posX, data->posY, data->posZ, data->orientation);
 

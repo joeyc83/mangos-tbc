@@ -19,9 +19,15 @@
 #include "Auth/HMACSHA1.h"
 #include "BigNumber.h"
 
+#include <algorithm>
+
 HMACSHA1::HMACSHA1(uint32 len, uint8 const* seed)
 {
-    memcpy(&m_key, seed, len);
+    // m_key only holds SEED_KEY_SIZE (16) bytes, kept for a later Initialize() call, which re-keys with that many
+    // bytes from m_key. A longer key (len > SEED_KEY_SIZE) is therefore not copied past it: the MAC is keyed from the
+    // caller's own buffer, which is already len bytes long. Do not call Initialize() again on an object constructed
+    // with len > SEED_KEY_SIZE.
+    memcpy(m_key, seed, std::min<uint32>(len, SEED_KEY_SIZE));
     m_mac = EVP_MAC_fetch(nullptr, "HMAC", nullptr);
     m_ctx = EVP_MAC_CTX_new(m_mac);
 
@@ -29,7 +35,7 @@ HMACSHA1::HMACSHA1(uint32 len, uint8 const* seed)
     params[0] = OSSL_PARAM_construct_utf8_string("digest", const_cast<char*>("SHA1"), 0);
     params[1] = OSSL_PARAM_construct_end();
 
-    EVP_MAC_init(m_ctx, m_key, len, params);
+    EVP_MAC_init(m_ctx, seed, len, params);
 }
 
 HMACSHA1::HMACSHA1(uint32 len, uint8 const* seed, bool) // to get over the default constructor
@@ -51,9 +57,10 @@ HMACSHA1::~HMACSHA1()
     EVP_MAC_free(m_mac);
 }
 
-void HMACSHA1::UpdateBigNumber(BigNumber* bn)
+void HMACSHA1::UpdateBigNumber(BigNumber* bn, int minSize)
 {
-    UpdateData(bn->AsByteArray().data(), bn->GetNumBytes());
+    auto const bytes = bn->AsByteArray(minSize);
+    UpdateData(bytes.data(), bytes.size());
 }
 
 void HMACSHA1::UpdateData(const uint8* data, int length)

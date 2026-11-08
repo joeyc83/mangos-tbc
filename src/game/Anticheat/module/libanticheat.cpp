@@ -222,11 +222,21 @@ void AnticheatLib::Reload()
     // will affect how the database data is interpreted (i.e. normalization of antispam blacklist entries)
     sAnticheatConfig.loadConfigSettings();
 
-    sLog.outString("Loading antispam system...");
-    sAntispamMgr.LoadFromDB();
+    // Also gates ValidateGuildName (guild/petition name blacklist check, Guild.cpp / PetitionsHandler.cpp):
+    // it has no switch of its own.
+    if (sAnticheatConfig.EnableAntispam())
+    {
+        sLog.outString("Loading antispam system...");
+        sAntispamMgr.LoadFromDB();
+    }
 
-    sLog.outString("Loading Warden scan database...");
-    sWardenScanMgr.loadFromDB();
+    // No real Warden object is ever created per session when anticheat is disabled (NewSession returns
+    // NullSessionAnticheat), so there is nothing to use these scan definitions for.
+    if (sAnticheatConfig.EnableAnticheat())
+    {
+        sLog.outString("Loading Warden scan database...");
+        sWardenScanMgr.loadFromDB();
+    }
 }
 
 void AnticheatLib::Initialize()
@@ -562,14 +572,14 @@ bool AnticheatLib::ChatCommand(ChatHandler *handler, const std::string &origArgs
         {
             session->SetAccountFlags(flags | ACCOUNT_FLAG_SHOW_ANTICHEAT);
             LoginDatabase.PExecute("UPDATE account SET flags = flags | 0x%x WHERE id = %u",
-                session->GetAccountId(), ACCOUNT_FLAG_SHOW_ANTICHEAT);
+                ACCOUNT_FLAG_SHOW_ANTICHEAT, session->GetAccountId());
             handler->SendSysMessage("Anticheat messages will be shown");
         }
         else
         {
             session->SetAccountFlags(flags & ~ACCOUNT_FLAG_SHOW_ANTICHEAT);
             LoginDatabase.PExecute("UPDATE account SET flags = flags & ~0x%x WHERE id = %u",
-                session->GetAccountId(), ACCOUNT_FLAG_SHOW_ANTICHEAT);
+                ACCOUNT_FLAG_SHOW_ANTICHEAT, session->GetAccountId());
             handler->SendSysMessage("Anticheat messages will be hidden");
         }
 
@@ -591,14 +601,14 @@ bool AnticheatLib::ChatCommand(ChatHandler *handler, const std::string &origArgs
         {
             session->SetAccountFlags(flags | ACCOUNT_FLAG_SHOW_ANTISPAM);
             LoginDatabase.PExecute("UPDATE account SET flags = flags | 0x%x WHERE id = %u",
-                session->GetAccountId(), ACCOUNT_FLAG_SHOW_ANTISPAM);
+                ACCOUNT_FLAG_SHOW_ANTISPAM, session->GetAccountId());
             handler->SendSysMessage("Antispam messages will be shown");
         }
         else
         {
             session->SetAccountFlags(flags & ~ACCOUNT_FLAG_SHOW_ANTISPAM);
             LoginDatabase.PExecute("UPDATE account SET flags = flags & ~0x%x WHERE id = %u",
-                session->GetAccountId(), ACCOUNT_FLAG_SHOW_ANTISPAM);
+                ACCOUNT_FLAG_SHOW_ANTISPAM, session->GetAccountId());
             handler->SendSysMessage("Antispam messages will be hidden");
         }
 

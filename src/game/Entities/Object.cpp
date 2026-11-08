@@ -1274,10 +1274,10 @@ bool WorldObject::HasStringId(uint32 stringId) const
 }
 
 WorldObject::WorldObject() :
-    m_transport(nullptr), m_transportInfo(nullptr), m_isOnEventNotified(false),
+    m_inRemoveList(false), m_transport(nullptr), m_transportInfo(nullptr), m_isOnEventNotified(false),
     m_visibilityData(this), m_nextUpdateTime(0), m_accumulatedUpdateDiff(0), m_currMap(nullptr),
     m_mapId(0), m_InstanceId(0), m_phaseMask(1),
-    m_isActiveObject(false), m_debugFlags(0), m_castCounter(0), m_inRemoveList(false)
+    m_isActiveObject(false), m_debugFlags(0), m_castCounter(0)
 {
 }
 
@@ -2184,7 +2184,7 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map)
         float dist = settings.forcedOnTop ? 0.0f : CONTACT_DISTANCE;
         pos = CreatureCreatePos(settings.spawner, settings.spawner->GetOrientation(), dist, settings.ori);
     }
-    uint32 lowGuid = map->GenerateLocalLowGuid(cinfo->GetHighGuid());
+    uint32 lowGuid = map->GenerateLocalLowGuid(cinfo->GetHighGuid(), cinfo->Entry);
     if (!creature->Create(lowGuid, lowGuid, pos, cinfo))
     {
         delete creature;

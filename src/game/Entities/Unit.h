@@ -1107,6 +1107,15 @@ struct SelectAttackingTargetParams
 
 struct SpellProcEventEntry;                                 // used only privately
 
+enum SwingErrors
+{
+    SWING_ERROR_NONE,
+    SWING_ERROR_NOT_IN_RANGE,
+    SWING_ERROR_TARGET_NOT_ALIVE,
+    SWING_ERROR_BAD_FACING,
+    SWING_ERROR_CANT_ATTACK_TARGET,
+};
+
 class Unit : public WorldObject
 {
     public:
@@ -1336,7 +1345,7 @@ class Unit : public WorldObject
         bool HasBreakableByDamageCrowdControlAura(Unit* excludeCasterChannel = nullptr, uint32 excludeAuraApplyMSTimeCutoff = 0) const;
         bool HasBreakableByDamageAuraType(AuraType type, uint32 excludeAura, uint32 excludeAuraApplyMSTimeCutoff) const;
         bool HasAuraPetShouldAvoidBreaking(Unit* excludeCasterChannel = nullptr, uint32 excludeAuraApplyMSTimeCutoff = 0) const;
-        void SendMeleeAttackStop(const Unit& victim) const;
+        void SendMeleeAttackStop(Unit const* victim) const;
         void SendMeleeAttackStart(const Unit& victim) const;
 
         void addUnitState(uint32 f) { m_state |= f; }
@@ -1838,7 +1847,6 @@ class Unit : public WorldObject
         bool IsHovering() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_HOVER); }
         bool IsWalking() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_WALK_MODE); }
         bool IsRooted() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_ROOT); }
-        bool IsJumping() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_JUMPING); }
         bool IsFalling() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_FALLING); }
 
         enum class MmapForcingStatus

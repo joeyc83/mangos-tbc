@@ -1673,12 +1673,12 @@ void ObjectMgr::LoadSpawnGroups()
                     {
                         if (CreatureInfo const* cinfo = GetCreatureTemplate(data.Entry))
                         {
-                            if (actives && (cinfo->ExtraFlags & CREATURE_EXTRA_FLAG_ACTIVE) != 0)
+                            if (actives && cinfo->HasFlag(CREATURE_EXTRA_FLAG_ACTIVE))
                             {
                                 entry.Active = true;
                                 break;
                             }
-                            else if (specials && cinfo->IsLargeOrBiggerCreature())
+                            else if (specials && cinfo->IsSpecialActive())
                             {
                                 entry.Large = true;
                                 break;
@@ -2390,9 +2390,9 @@ void ObjectMgr::LoadCreatures()
         {
             AddCreatureToGrid(guid, &data);
 
-            if (sWorld.getConfig(CONFIG_BOOL_AUTOLOAD_ACTIVE) && cInfo && cInfo->ExtraFlags & CREATURE_EXTRA_FLAG_ACTIVE)
+            if (sWorld.getConfig(CONFIG_BOOL_AUTOLOAD_ACTIVE) && cInfo && cInfo->HasFlag(CREATURE_EXTRA_FLAG_ACTIVE))
                 m_activeCreatures.emplace(data.mapid, guid);
-            else if (sWorld.getConfig(CONFIG_BOOL_SPECIALS_ACTIVE) && cInfo && cInfo->IsLargeOrBiggerCreature())
+            else if (sWorld.getConfig(CONFIG_BOOL_SPECIALS_ACTIVE) && cInfo && cInfo->IsSpecialActive())
                 m_largeCreatures.emplace(data.mapid, guid);
         }
 
@@ -9604,7 +9604,18 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
         for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
         {
             if (spellinfo->Effect[i] == SPELL_EFFECT_LEARN_SPELL && spellinfo->EffectTriggerSpell[i])
-                trainerSpell.learnedSpell.push_back(spellinfo->EffectTriggerSpell[i]);
+            {
+                switch (spellinfo->EffectImplicitTargetA[i])
+                {
+                    case TARGET_NONE:
+                    case TARGET_UNIT_CASTER:
+                        // ...looks like the specified spell is actually a trainer's spell casted on a player to teach another spell
+                        // Trainer's spells can teach more than one spell (up to number of effects)
+                        // Self-casts listed in trainer's lists usually come from recipes which were made trainable in a later patch
+                        trainerSpell.learnedSpell.push_back(spellinfo->EffectTriggerSpell[i]);
+                        break;
+                }
+            }
         }
 
         for (auto& learnedSpell : trainerSpell.learnedSpell)

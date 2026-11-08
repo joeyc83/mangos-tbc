@@ -24,6 +24,7 @@
 #include <G3D/AABox.h>
 
 #include <Platform/Define.h>
+#include <Util/Errors.h>
 
 #include <vector>
 #include <algorithm>
@@ -210,6 +211,9 @@ class BIH
                                 intervalMax = (tf <= intervalMax) ? tf : intervalMax;
                                 continue;
                             }
+
+                            MANGOS_ASSERT(stackPos < MAX_STACK_SIZE); // should never happen, subdivide guards against this
+
                             // ray passes through both nodes
                             // push back node
                             if (stackPos >= MAX_STACK_SIZE)

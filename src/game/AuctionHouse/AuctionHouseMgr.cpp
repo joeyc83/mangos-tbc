@@ -464,6 +464,48 @@ void AuctionHouseMgr::LoadAuctions()
     sLog.outString();
 }
 
+void AuctionHouseMgr::RemovePlayerAuctions(ObjectGuid playerGuid)
+{
+    uint32 const lowGuid = playerGuid.GetCounter();
+
+    for (AuctionHouseObject& house : mAuctions)
+    {
+        std::vector<AuctionEntry*> owned;
+        for (auto const& entry : house.GetAuctions())
+        {
+            AuctionEntry* auction = entry.second;
+            if (auction->owner == lowGuid)
+            {
+                owned.push_back(auction);
+            }
+            else if (auction->bidder == lowGuid)
+            {
+                // the bid goes with the character: the auction goes on as if nobody had bid
+                auction->bidder = 0;
+                auction->bid = 0;
+                CharacterDatabase.PExecute("UPDATE auction SET buyguid = '0', lastbid = '0' WHERE id = '%u'", auction->Id);
+            }
+        }
+
+        for (AuctionEntry* auction : owned)
+        {
+            if (auction->bidder)                            // the last bidder gets the bid back
+                WorldSession::SendAuctionCancelledToBidderMail(auction);
+
+            if (Item* item = GetAItem(auction->itemGuidLow))
+            {
+                RemoveAItem(auction->itemGuidLow);
+                item->FSetState(ITEM_REMOVED);
+                item->SaveToDB();                           // deletes the item and its database rows
+            }
+
+            auction->DeleteFromDB();
+            house.RemoveAuction(auction->Id);
+            delete auction;
+        }
+    }
+}
+
 void AuctionHouseMgr::AddAItem(Item* it)
 {
     MANGOS_ASSERT(it);
@@ -631,6 +673,50 @@ void AuctionHouseObject::BuildListOwnerItems(WorldPacket& data, Player* player, 
     }
 }
 
+// Current bid, or the start bid while nobody has bid
+static uint32 GetAuctionPrice(AuctionEntry const* auction)
+{
+    return auction->bid ? auction->bid : auction->startbid;
+}
+
+// Buyout, or the current price when there is no buyout
+static uint32 GetAuctionBuyoutOrPrice(AuctionEntry const* auction)
+{
+    return auction->buyout ? auction->buyout : GetAuctionPrice(auction);
+}
+
+// Lower-case name of the item as shown in the game: its name, then the suffix of its random property
+static std::wstring GetAuctionSortName(AuctionEntry const* auction, ItemPrototype const* proto, WorldSession const* session)
+{
+    std::string name = proto->Name1;
+    sObjectMgr.GetItemLocaleStrings(proto->ItemId, session->GetSessionDbLocaleIndex(), &name);
+
+    char* const* suffix = nullptr;
+    if (auction->itemRandomPropertyId > 0)
+    {
+        if (ItemRandomPropertiesEntry const* property = sItemRandomPropertiesStore.LookupEntry(uint32(auction->itemRandomPropertyId)))
+            suffix = property->nameSuffix;
+    }
+    else if (auction->itemRandomPropertyId < 0)
+    {
+        if (ItemRandomSuffixEntry const* property = sItemRandomSuffixStore.LookupEntry(uint32(-auction->itemRandomPropertyId)))
+            suffix = property->nameSuffix;
+    }
+
+    LocaleConstant const locale = session->GetSessionDbcLocale();
+    if (suffix && suffix[locale] && *suffix[locale])
+    {
+        name += ' ';
+        name += suffix[locale];
+    }
+
+    std::wstring wname;
+    Utf8toWStr(name, wname);
+    wstrToLower(wname);
+    return wname;
+}
+
+// Order of a browse search: the server picks each page of results in this order
 int AuctionEntry::CompareAuctionEntry(uint32 column, const AuctionEntry* auc, Player* viewPlayer) const
 {
     switch (column)
@@ -641,9 +727,12 @@ int AuctionEntry::CompareAuctionEntry(uint32 column, const AuctionEntry* auc, Pl
             ItemPrototype const* itemProto2 = ObjectMgr::GetItemPrototype(auc->itemTemplate);
             if (!itemProto2 || !itemProto1)
                 return 0;
-            if (itemProto1->RequiredLevel < itemProto2->RequiredLevel)
+            // a required level of 0 counts as 1
+            uint32 const level1 = std::max(itemProto1->RequiredLevel, 1u);
+            uint32 const level2 = std::max(itemProto2->RequiredLevel, 1u);
+            if (level1 < level2)
                 return -1;
-            if (itemProto1->RequiredLevel > itemProto2->RequiredLevel)
+            if (level1 > level2)
                 return +1;
             break;
         }
@@ -653,28 +742,26 @@ int AuctionEntry::CompareAuctionEntry(uint32 column, const AuctionEntry* auc, Pl
             ItemPrototype const* itemProto2 = ObjectMgr::GetItemPrototype(auc->itemTemplate);
             if (!itemProto2 || !itemProto1)
                 return 0;
-            if (itemProto1->Quality < itemProto2->Quality)
-                return -1;
+            // best quality first
             if (itemProto1->Quality > itemProto2->Quality)
+                return -1;
+            if (itemProto1->Quality < itemProto2->Quality)
                 return +1;
             break;
         }
         case 2:                                             // buyoutthenbid = 2
-            if (buyout != auc->buyout)
-            {
-                if (buyout < auc->buyout)
-                    return -1;
-                if (buyout > auc->buyout)
-                    return +1;
-            }
-            else
-            {
-                if (bid < auc->bid)
-                    return -1;
-                if (bid > auc->bid)
-                    return +1;
-            }
+        {
+            uint32 const buyout1 = GetAuctionBuyoutOrPrice(this);
+            uint32 const buyout2 = GetAuctionBuyoutOrPrice(auc);
+            if (buyout1 != buyout2)
+                return buyout1 < buyout2 ? -1 : +1;
+
+            uint32 const price1 = GetAuctionPrice(this);
+            uint32 const price2 = GetAuctionPrice(auc);
+            if (price1 != price2)
+                return price1 < price2 ? -1 : +1;
             break;
+        }
         case 3:                                             // duration = 3
         {
             if (expireTime < auc->expireTime)
@@ -685,12 +772,14 @@ int AuctionEntry::CompareAuctionEntry(uint32 column, const AuctionEntry* auc, Pl
         break;
         case 4:                                             // status = 4
         {
-            if (bidder < auc->bidder)
-                return -1;
-            if (bidder > auc->bidder)
-                return +1;
+            // the viewer's own bids first, then the auctions someone else bid on
+            uint32 const viewer = viewPlayer->GetGUIDLow();
+            uint32 const rank1 = !bidder ? 0 : (bidder == viewer ? 2 : 1);
+            uint32 const rank2 = !auc->bidder ? 0 : (auc->bidder == viewer ? 2 : 1);
+            if (rank1 != rank2)
+                return rank1 > rank2 ? -1 : +1;
+            break;
         }
-        break;
         case 5:                                             // name = 5
         {
             ItemPrototype const* itemProto1 = ObjectMgr::GetItemPrototype(itemTemplate);
@@ -698,39 +787,19 @@ int AuctionEntry::CompareAuctionEntry(uint32 column, const AuctionEntry* auc, Pl
             if (!itemProto2 || !itemProto1)
                 return 0;
 
-            int32 loc_idx = viewPlayer->GetSession()->GetSessionDbLocaleIndex();
+            // full name, random suffix included
+            if (itemTemplate == auc->itemTemplate && itemRandomPropertyId == auc->itemRandomPropertyId)
+                return 0;
 
-            std::string name1 = itemProto1->Name1;
-            sObjectMgr.GetItemLocaleStrings(itemProto1->ItemId, loc_idx, &name1);
-
-            std::string name2 = itemProto2->Name1;
-            sObjectMgr.GetItemLocaleStrings(itemProto2->ItemId, loc_idx, &name2);
-
-            std::wstring wname1, wname2;
-            Utf8toWStr(name1, wname1);
-            Utf8toWStr(name2, wname2);
-            return wname1.compare(wname2);
+            WorldSession const* session = viewPlayer->GetSession();
+            return GetAuctionSortName(this, itemProto1, session).compare(GetAuctionSortName(auc, itemProto2, session));
         }
-        case 6:                                             // minbidbuyout = 6
+        case 6:                                             // buyout = 6
         {
-            uint32 bid1 = bid ? bid : startbid;
-            uint32 bid2 = auc->bid ? auc->bid : auc->startbid;
-
-            if (bid1 != bid2)
-            {
-                if (bid1 < bid2)
-                    return -1;
-                if (bid1 > bid2)
-                    return +1;
-            }
-            else
-            {
-                if (buyout < auc->buyout)
-                    return -1;
-                if (buyout > auc->buyout)
-                    return +1;
-            }
-
+            uint32 const buyout1 = GetAuctionBuyoutOrPrice(this);
+            uint32 const buyout2 = GetAuctionBuyoutOrPrice(auc);
+            if (buyout1 != buyout2)
+                return buyout1 < buyout2 ? -1 : +1;
             break;
         }
         case 7:                                             // seller = 7
@@ -951,10 +1020,23 @@ uint32 AuctionEntry::GetAuctionCut() const
     return uint32(auctionHouseEntry->cutPercent * bid * sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_CUT) / 100.0f);
 }
 
-/// the sum of outbid is (1% from current bid)*5, if bid is very small, it is 1c
+/// the minimal outbid is 0 without a bid, else 5% of the bid rounded down to a multiple of 5 below 100 and to two significant digits above, and at least 1c
 uint32 AuctionEntry::GetAuctionOutBid() const
 {
-    uint32 outbid = (bid / 100) * 5;
+    if (!bid)
+        return 0;
+
+    uint32 outbid = bid / 20;
+    if (outbid < 100)
+        outbid -= outbid % 5;
+    else
+    {
+        uint32 unit = 1;
+        while (outbid / unit >= 100)
+            unit *= 10;
+        outbid -= outbid % unit;
+    }
+
     if (!outbid)
         outbid = 1;
     return outbid;
@@ -1000,6 +1082,9 @@ bool AuctionEntry::UpdateBid(uint32 newbid, Player* newbidder /*=nullptr*/)
     if (buyout && newbid > buyout)
         newbid = buyout;
 
+    uint32 oldBidder = 0;
+    uint32 oldBid = 0;
+
     if (newbidder && newbidder->GetGUIDLow() == bidder)
     {
         newbidder->ModifyMoney(-int32(newbid - bid));
@@ -1009,12 +1094,15 @@ bool AuctionEntry::UpdateBid(uint32 newbid, Player* newbidder /*=nullptr*/)
         if (newbidder)
             newbidder->ModifyMoney(-int32(newbid));
 
-        if (bidder)                                     // return money to old bidder if present
-            WorldSession::SendAuctionOutbiddedMail(this);
+        oldBidder = bidder;
+        oldBid = bid;
     }
 
     bidder = newbidder ? newbidder->GetGUIDLow() : 0;
     bid = newbid;
+
+    if (oldBidder)                                          // return money to old bidder if present, and tell him the new bid
+        WorldSession::SendAuctionOutbiddedMail(this, oldBidder, oldBid);
 
     if ((newbid < buyout) || (buyout == 0))                 // bid
     {

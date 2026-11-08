@@ -6718,6 +6718,10 @@ void Aura::PeriodicTick()
                 pdamage = target->MeleeDamageBonusTaken(caster, pdamage, attackType, SpellSchoolMask(spellProto->SchoolMask), spellProto, GetEffIndex(), DOT, GetStackAmount());
             }
 
+            // for non-bleed normal school dots, reduce damage with armor
+            if (spellProto->SchoolMask == SPELL_SCHOOL_MASK_NORMAL && isNotBleed)
+                pdamage = target->CalcArmorReducedDamage(caster, target, pdamage);
+
             pdamage -= target->GetResilienceRatingDamageReduction(pdamage, SpellDmgClass(spellProto->DmgClass), true);
 
             target->CalculateDamageAbsorbAndResist(caster, GetSpellSchoolMask(spellProto), DOT, pdamage, &absorb, &resist, IsReflectableSpell(spellProto), IsResistableSpell(spellProto) && !spellProto->HasAttribute(SPELL_ATTR_EX5_NO_PARTIAL_RESISTS));
@@ -8551,7 +8555,11 @@ void SpellAuraHolder::SetAuraFlag(uint32 slot, bool add)
             if (m_auras[i])
                 flags |= (1 << i); // AFLAG_EFFECT_0 is 1 and rest is bitshift
 
-        flags |= ((IsPositive() && !m_spellProto->HasAttribute(SPELL_ATTR_NO_AURA_CANCEL)) ? AFLAG_CANCELABLE : AFLAG_NOT_CANCELABLE);
+        if (GetCasterGuid() == m_target->GetObjectGuid())
+            flags |= AFLAG_NOT_CASTER;
+
+        if (IsPositive() && !m_spellProto->HasAttribute(SPELL_ATTR_NO_AURA_CANCEL))
+            flags |= AFLAG_CANCELABLE;
 
         val |= (flags << byte);
     }

@@ -35,8 +35,12 @@
 #include "Anticheat/Anticheat.hpp"
 #include "Config/Config.h"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <functional>
+#include <limits>
 #include <memory>
 #include "World/WorldState.h"
 
@@ -68,18 +72,39 @@ struct ServerPktHeader
 #pragma pack(pop)
 #endif
 
-std::vector<uint32> InitOpcodeCooldowns()
+std::vector<uint32> WorldSocket::m_packetCooldowns(NUM_MSG_TYPES, 0);
+
+void WorldSocket::LoadPacketCooldowns()
 {
-    std::vector<uint32> data(NUM_MSG_TYPES, 0);
+    std::fill(m_packetCooldowns.begin(), m_packetCooldowns.end(), 0);
 
-    data[CMSG_WHO] = 5000;
-    data[CMSG_WHOIS] = 5000;
-    data[CMSG_INSPECT] = 5000;
+    std::string const list = sConfig.GetStringDefault("Network.PacketCooldowns", "CMSG_WHO:5000 CMSG_WHOIS:5000");
+    for (std::string const& entry : StrSplit(list, " "))
+    {
+        std::string::size_type const colon = entry.find(':');
+        char* end = nullptr;
+        unsigned long long const cooldown = colon == std::string::npos ? 0 : std::strtoull(entry.c_str() + colon + 1, &end, 10);
+        if (colon == std::string::npos || !std::isdigit(static_cast<unsigned char>(entry[colon + 1])) || *end != '\0'
+            || cooldown > std::numeric_limits<uint32>::max())
+        {
+            sLog.outError("Network.PacketCooldowns: '%s' is not OPCODE_NAME:milliseconds, ignored.", entry.c_str());
+            continue;
+        }
 
-    return data;
+        std::string const name = entry.substr(0, colon);
+        uint32 opcode = 0;
+        while (opcode < NUM_MSG_TYPES && name != opcodeTable[opcode].name)
+            ++opcode;
+
+        if (opcode == NUM_MSG_TYPES || opcodeTable[opcode].status == STATUS_NEVER)
+        {
+            sLog.outError("Network.PacketCooldowns: '%s' is not an opcode the server handles, ignored.", name.c_str());
+            continue;
+        }
+
+        m_packetCooldowns[opcode] = uint32(cooldown);
+    }
 }
-
-std::vector<uint32> WorldSocket::m_packetCooldowns = InitOpcodeCooldowns();
 
 std::deque<uint32> WorldSocket::GetOutOpcodeHistory()
 {
@@ -94,7 +119,7 @@ std::deque<uint32> WorldSocket::GetIncOpcodeHistory()
 }
 
 WorldSocket::WorldSocket(boost::asio::io_context& context) : AsyncSocket(context), m_lastPingTime(std::chrono::system_clock::time_point::min()), m_overSpeedPings(0),
-    m_session(nullptr), m_seed(urand()), m_loggingPackets(true)
+    m_session(nullptr), m_seed(urand()), m_loggingPackets(false)
 {
 }
 
@@ -376,7 +401,6 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
 
     v.SetHexStr(fields[5].GetString());
     s.SetHexStr(fields[6].GetString());
-    m_s = s;
 
     const char* sStr = s.AsHexStr();                        // Must be freed by OPENSSL_free()
     const char* vStr = v.AsHexStr();                        // Must be freed by OPENSSL_free()
@@ -416,7 +440,21 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
     else
         expansion = std::min(playerAddonLevel, currentServerExpansion);
 
-    K.SetHexStr(fields[2].GetString());
+    // sessionkey must be a full 40 byte (80 hex char) SRP6 session key; anything else
+    // (in particular an empty string, which SetHexStr turns into 0) must not be accepted
+    // as it would let the session proof be computed without knowing the real key.
+    std::string sessionKeyStr = fields[2].GetString();
+    if (sessionKeyStr.empty() || sessionKeyStr.size() > 80)
+    {
+        WorldPacket packet(SMSG_AUTH_RESPONSE, 1);
+        packet << uint8(AUTH_FAILED);
+        SendPacket(packet);
+
+        sLog.outError("WorldSocket::HandleAuthSession: Sent Auth Response (invalid session key for account %s).", safe_account.c_str());
+        return false;
+    }
+
+    K.SetHexStr(sessionKeyStr.c_str());
 
     time_t mutetime = time_t (fields[8].GetUInt64());
 
@@ -467,7 +505,7 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
     sha.UpdateData((uint8*) & t, 4);
     sha.UpdateData((uint8*) & clientSeed, 4);
     sha.UpdateData((uint8*) & m_seed, 4);
-    sha.UpdateBigNumbers(&K, nullptr);
+    sha.UpdateData(K.AsByteArray(40));                  // the client hashes the 40 bytes of K
     sha.Finalize();
 
     if (memcmp(sha.GetDigest(), digest, 20))
@@ -505,6 +543,7 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
     SqlStatement stmt = LoginDatabase.CreateStatement(updAccount, "INSERT INTO account_logons(accountId,ip,loginTime,loginSource) VALUES(?,?," _NOW_ ",?)");
     stmt.PExecute(id, address.c_str(), std::to_string(realmID).c_str());
 
+    m_sessionKey = K;             // kept for GetSessionKey()
     m_crypt.Init(&K);
 
     m_session = sWorld.FindSession(id);

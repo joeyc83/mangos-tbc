@@ -240,7 +240,7 @@ void MovementInfo::Read(ByteBuffer& data)
         data >> t_time;
     }
 
-    if (HasMovementFlag(MovementFlags(MOVEFLAG_SWIMMING | MOVEFLAG_FLYING2)))
+    if (HasMovementFlag(MovementFlags(MOVEFLAG_SWIMMING | MOVEFLAG_FLYING)))
     {
         data >> s_pitch;
     }
@@ -288,7 +288,7 @@ void MovementInfo::Write(ByteBuffer& data) const
         data << t_time;
     }
 
-    if (HasMovementFlag(MovementFlags(MOVEFLAG_SWIMMING | MOVEFLAG_FLYING2)))
+    if (HasMovementFlag(MovementFlags(MOVEFLAG_SWIMMING | MOVEFLAG_FLYING)))
     {
         data << s_pitch;
     }
@@ -332,14 +332,14 @@ Unit::Unit() :
     m_regenTimer(0),
     m_combatData(new CombatData(this)),
     m_combatManager(this),
+    m_hasPeriodicAura(false),
     m_guardianPetsIterator(m_guardianPets.end()),
     m_spellUpdateHappening(false),
     m_spellProcsHappening(false),
     m_hasHeartbeatProcCounter(0),
     m_ignoreRangedTargets(false),
     m_auraUpdateMask(0),
-    m_isMountOverriden(false), m_overridenMountId(0),
-    m_hasPeriodicAura(false)
+    m_isMountOverriden(false), m_overridenMountId(0)
 {
     m_objectType |= TYPEMASK_UNIT;
     m_objectTypeId = TYPEID_UNIT;
@@ -660,14 +660,6 @@ void Unit::EvadeTimerExpired()
     getThreatManager().SetTargetSuppressed(GetVictim());
 }
 
-enum SwingErrors
-{
-    SWING_ERROR_NOT_IN_RANGE,
-    SWING_ERROR_TARGET_NOT_ALIVE,
-    SWING_ERROR_BAD_FACING,
-    SWING_ERROR_CANT_ATTACK_TARGET,
-};
-
 bool Unit::UpdateMeleeAttackingState()
 {
     Unit* victim = GetVictim();
@@ -685,7 +677,7 @@ bool Unit::UpdateMeleeAttackingState()
     if (!isAttackReady(BASE_ATTACK) && !(isAttackReady(OFF_ATTACK) && hasOffhandWeaponForAttack()))
         return false;
 
-    uint8 swingError = 0;
+    uint8 swingError = SWING_ERROR_NONE;
     if (!CanReachWithMeleeAttack(victim))
         swingError = SWING_ERROR_NOT_IN_RANGE;
     else if (!HasInArc(victim, 2 * M_PI_F / 3))
@@ -721,8 +713,11 @@ bool Unit::UpdateMeleeAttackingState()
 
     if (swingError)
     {
-        setAttackTimer(BASE_ATTACK, 100);
-        setAttackTimer(OFF_ATTACK, 100);
+        // delaying a weapon that is not ready would make it ready sooner
+        if (isAttackReady(BASE_ATTACK))
+            setAttackTimer(BASE_ATTACK, 100);
+        if (hasOffhandWeaponForAttack() && isAttackReady(OFF_ATTACK))
+            setAttackTimer(OFF_ATTACK, 100);
     }
 
     Player* player = IsClientControlled() ? const_cast<Player*>(GetClientControlling()) : nullptr;
@@ -2989,14 +2984,17 @@ void Unit::SendMeleeAttackStart(const Unit& victim) const
     DETAIL_FILTER_LOG(LOG_FILTER_COMBAT, "WORLD: Sent SMSG_ATTACKSTART");
 }
 
-void Unit::SendMeleeAttackStop(const Unit& victim) const
+void Unit::SendMeleeAttackStop(Unit const* victim) const
 {
     WorldPacket data(SMSG_ATTACKSTOP, (4 + 16));            // we guess size
     data << GetPackGUID();
-    data << victim.GetPackGUID();
+    if (victim)
+        data << victim->GetPackGUID();
+    else
+        data << PackedGuid();
     data << uint32(IsDead() ? 1 : 0);
     SendMessageToSet(data, true);
-    DETAIL_FILTER_LOG(LOG_FILTER_COMBAT, "%s stopped attacking %s", GetGuidStr().c_str(), victim.GetGuidStr().c_str());
+    DETAIL_FILTER_LOG(LOG_FILTER_COMBAT, "%s stopped attacking %s", GetGuidStr().c_str(), victim ? victim->GetGuidStr().c_str() : "nothing");
 }
 
 SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
@@ -6815,7 +6813,7 @@ void Unit::MeleeAttackStop(Unit* victim)
         clearUnitState(UNIT_STAT_MELEE_ATTACKING);
         InterruptSpell(CURRENT_MELEE_SPELL);
         if (victim)
-            SendMeleeAttackStop(*victim);
+            SendMeleeAttackStop(victim);
     }
 }
 
@@ -9777,7 +9775,7 @@ float Unit::GetTotalAttackPowerValue(WeaponAttackType attType) const
 {
     if (attType == RANGED_ATTACK)
     {
-        int32 ap = GetInt32Value(UNIT_FIELD_RANGED_ATTACK_POWER) + GetInt32Value(UNIT_FIELD_RANGED_ATTACK_POWER_MODS);
+        int32 ap = GetInt32Value(UNIT_FIELD_RANGED_ATTACK_POWER) + GetInt16Value(UNIT_FIELD_RANGED_ATTACK_POWER_MODS, size_t(AttackPowerModSign::MOD_SIGN_POS)) + GetInt16Value(UNIT_FIELD_RANGED_ATTACK_POWER_MODS, size_t(AttackPowerModSign::MOD_SIGN_NEG));
         if (ap < 0)
             return 0.0f;
         return ap * (1.0f + GetFloatValue(UNIT_FIELD_RANGED_ATTACK_POWER_MULTIPLIER));
@@ -10555,6 +10553,10 @@ bool Unit::SetConfused(bool apply, ObjectGuid casterGuid, uint32 spellID)
                 Unit* source = (fears.empty() ? nullptr : fears.back()->GetCaster());
                 GetMotionMaster()->MoveFleeing(source ? source : this);
             }
+
+            // The generator that would give control back may be gone (e.g. cleared on uncharm)
+            if (!apply && IsPlayer() && !HasCharmer() && !IsFleeing() && !IsInPanic())
+                static_cast<Player*>(this)->UpdateClientControl(this, true);
         }
 
         if (apply)
@@ -10598,6 +10600,10 @@ bool Unit::SetFleeing(bool apply, ObjectGuid casterGuid/* = ObjectGuid()*/, uint
                 Unit* source = (IsInWorld() ? GetMap()->GetUnit(casterGuid) : nullptr);
                 GetMotionMaster()->MoveFleeing((source ? source : this), duration);
             }
+
+            // The generator that would give control back may be gone (e.g. cleared on uncharm)
+            if (!apply && IsPlayer() && !HasCharmer() && !IsConfused() && !IsInPanic())
+                static_cast<Player*>(this)->UpdateClientControl(this, true);
         }
 
         if (apply)
@@ -11786,7 +11792,7 @@ Unit* Unit::TakePossessOf(SpellEntry const* spellEntry, SummonPropertiesEntry co
     if (x == 0.0f && y == 0.0f && z == 0.0f)
         pos = CreatureCreatePos(this, GetOrientation(), CONTACT_DISTANCE, ang);
 
-    uint32 lowGuid = GetMap()->GenerateLocalLowGuid(cinfo->GetHighGuid());
+    uint32 lowGuid = GetMap()->GenerateLocalLowGuid(cinfo->GetHighGuid(), cinfo->Entry);
     if (!possessed->Create(lowGuid, lowGuid, pos, cinfo))
     {
         delete possessed;
@@ -12291,8 +12297,20 @@ void Unit::Uncharm(Unit* charmed, uint32 /*spellId*/)
         charmed->GetCharmInfo()->ResetCharmState();
         charmedPlayer->DeleteCharmInfo();
 
+        const bool panic = charmed->IsInPanic(), fleeing = charmed->IsFleeing(), confused = charmed->IsConfused();
+
         charmed->GetMotionMaster()->Clear(false, true);
         charmed->GetMotionMaster()->MoveIdle();
+
+        // The clear destroyed the confused or fleeing movement of a player still under crowd control
+        if (confused)
+            charmed->GetMotionMaster()->MoveConfused();
+        else if (fleeing && !panic)
+        {
+            AuraList const& fears = charmed->GetAurasByType(SPELL_AURA_MOD_FEAR);
+            Unit* source = (fears.empty() ? nullptr : fears.back()->GetCaster());
+            charmed->GetMotionMaster()->MoveFleeing(source ? source : this);
+        }
 
         charmed->DeleteThreatList();
 
@@ -12366,7 +12384,7 @@ void Unit::Uncharm(Unit* charmed, uint32 /*spellId*/)
 void Unit::RemoveUnattackableTargets(Unit* charmer)
 {
     // first find friendly target (stopping combat here is not recommended because m_attackers will be modified)
-    AttackerSet friendlyTargets;
+    std::set<std::pair<Unit*, float>> friendlyTargets;
     for (auto itr = getAttackers().begin(); itr != getAttackers().end(); ++itr)
     {
         Unit* attacker = (*itr);
@@ -12374,7 +12392,7 @@ void Unit::RemoveUnattackableTargets(Unit* charmer)
             continue;
 
         if (CanAttack(attacker))
-            friendlyTargets.insert(attacker);
+            friendlyTargets.insert({attacker, 0.f});
     }
 
     for (auto itr = getThreatManager().getThreatList().begin(); itr != getThreatManager().getThreatList().end(); ++itr)
@@ -12384,16 +12402,16 @@ void Unit::RemoveUnattackableTargets(Unit* charmer)
             continue;
 
         if (!CanAttack(attacker))
-            friendlyTargets.insert(attacker);
+            friendlyTargets.insert({attacker, (*itr)->getThreat()});
     }
 
     // now stop attackers combat and transfer threat generated from this to owner, also get the total generated threat
-    for (auto attacker : friendlyTargets)
+    for (auto&[attacker, threat] : friendlyTargets)
     {
         attacker->AttackStop(true, true);
         attacker->getThreatManager().modifyThreatPercent(this, -101);     // only remove the possessed creature from threat list because it can be filled by other players
         if (charmer && IsPropagatingThreatToOwner())
-            attacker->AddThreat(charmer);
+            attacker->AddThreat(charmer, threat);
     }
 }
 
@@ -13310,7 +13328,7 @@ void Unit::CharmCooldownInitialize(WorldPacket& data) const
             continue;
 
         if (cdData->IsPermanent())
-            catCDDuration |= 0x8000000;
+            catCDDuration |= 0x80000000;
 
         data << uint16(cdData->GetSpellId());
         data << uint16(cdData->GetCategory());              // spell category

@@ -5315,7 +5315,7 @@ bool ChatHandler::HandleBanInfoIPCommand(char* args)
     std::string IP = cIP;
 
     LoginDatabase.escape_string(IP);
-    auto queryResult = LoginDatabase.PQuery("SELECT ip, " _FROM_UNIXTIME_("banned_at") ", " _FROM_UNIXTIME_("expires_at") ", expires_at-" _UNIXTIME_ ", reason,banned_by,expires_at-banned_at"
+    auto queryResult = LoginDatabase.PQuery("SELECT ip, " _FROM_UNIXTIME_("banned_at") ", " _FROM_UNIXTIME_("expires_at") ", expires_at-" _UNIXTIME_ ", reason,banned_by,expires_at-banned_at "
                                             "FROM ip_banned WHERE ip = '%s'", IP.c_str());
     if (!queryResult)
     {
@@ -5432,7 +5432,13 @@ bool ChatHandler::HandleBanListHelper(std::unique_ptr<QueryResult> queryResult)
                 do
                 {
                     time_t t_ban = fields2[0].GetUInt64();
-                    tm* aTm_ban = localtime(&t_ban);
+                    tm tm_ban;
+#ifdef _WIN32
+                    localtime_s(&tm_ban, &t_ban);
+#else
+                    localtime_r(&t_ban, &tm_ban);
+#endif
+                    tm* aTm_ban = &tm_ban;
 
                     if (fields2[0].GetUInt64() == fields2[1].GetUInt64())
                     {
@@ -5443,7 +5449,13 @@ bool ChatHandler::HandleBanListHelper(std::unique_ptr<QueryResult> queryResult)
                     else
                     {
                         time_t t_unban = fields2[1].GetUInt64();
-                        tm* aTm_unban = localtime(&t_unban);
+                        tm tm_unban;
+#ifdef _WIN32
+                        localtime_s(&tm_unban, &t_unban);
+#else
+                        localtime_r(&t_unban, &tm_unban);
+#endif
+                        tm* aTm_unban = &tm_unban;
                         PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|%02d-%02d-%02d %02d:%02d|%-15.15s|%-15.15s|%-15.15s|%-15.15s|",
                                         account_name.c_str(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min,
                                         aTm_unban->tm_year % 100, aTm_unban->tm_mon + 1, aTm_unban->tm_mday, aTm_unban->tm_hour, aTm_unban->tm_min,
@@ -5511,7 +5523,13 @@ bool ChatHandler::HandleBanListIPCommand(char* args)
             SendSysMessage("-------------------------------------------------------------------------------");
             Field* fields = queryResult->Fetch();
             time_t t_ban = fields[1].GetUInt64();
-            tm* aTm_ban = localtime(&t_ban);
+            tm tm_ban;
+#ifdef _WIN32
+            localtime_s(&tm_ban, &t_ban);
+#else
+            localtime_r(&t_ban, &tm_ban);
+#endif
+            tm* aTm_ban = &tm_ban;
             if (fields[1].GetUInt64() == fields[2].GetUInt64())
             {
                 PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|   permanent  |%-15.15s|%-15.15s|",
@@ -5521,7 +5539,13 @@ bool ChatHandler::HandleBanListIPCommand(char* args)
             else
             {
                 time_t t_unban = fields[2].GetUInt64();
-                tm* aTm_unban = localtime(&t_unban);
+                tm tm_unban;
+#ifdef _WIN32
+                localtime_s(&tm_unban, &t_unban);
+#else
+                localtime_r(&t_unban, &tm_unban);
+#endif
+                tm* aTm_unban = &tm_unban;
                 PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|%02d-%02d-%02d %02d:%02d|%-15.15s|%-15.15s|",
                                 fields[0].GetString(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min,
                                 aTm_unban->tm_year % 100, aTm_unban->tm_mon + 1, aTm_unban->tm_mday, aTm_unban->tm_hour, aTm_unban->tm_min,
@@ -5590,6 +5614,14 @@ bool ChatHandler::HandleGMFlyCommand(char* args)
     Player* target = getSelectedPlayer();
     if (!target)
         target = m_session->GetPlayer();
+
+    // only game master accounts may fly: the anticheat strips these movement flags from player accounts
+    if (target->GetSession()->GetSecurity() == SEC_PLAYER)
+    {
+        PSendSysMessage("%s is not a game master.", GetNameLink(target).c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
 
     target->SetCanFly(value);
     PSendSysMessage(LANG_COMMAND_FLYMODE_STATUS, GetNameLink(target).c_str(), args);
@@ -6457,19 +6489,18 @@ bool ChatHandler::HandleSendMassMailCommand(char* args)
         return false;
 
     // need dynamic object because it trasfered to mass mailer
-    MailDraft* draft = new MailDraft;
+    auto mailDraft = std::make_unique<MailDraft>();
 
     // fill mail
-    if (!HandleSendMailHelper(*draft, args))
+    if (!HandleSendMailHelper(*mailDraft, args))
     {
-        delete draft;
         return false;
     }
 
     // from console show nonexistent sender
     MailSender sender(MAIL_NORMAL, m_session ? m_session->GetPlayer()->GetObjectGuid().GetCounter() : 0, MAIL_STATIONERY_GM);
 
-    sMassMailMgr.AddMassMailTask(draft, sender, raceMask);
+    sMassMailMgr.AddMassMailTask(std::move(mailDraft), sender, raceMask);
 
     PSendSysMessage(LANG_MAIL_SENT, name);
     return true;
@@ -6592,20 +6623,18 @@ bool ChatHandler::HandleSendMassItemsCommand(char* args)
         return false;
 
     // need dynamic object because it trasfered to mass mailer
-    MailDraft* draft = new MailDraft;
-
+    auto mailDraft = std::make_unique<MailDraft>();
 
     // fill mail
-    if (!HandleSendItemsHelper(*draft, args))
+    if (!HandleSendItemsHelper(*mailDraft, args))
     {
-        delete draft;
         return false;
     }
 
     // from console show nonexistent sender
     MailSender sender(MAIL_NORMAL, m_session ? m_session->GetPlayer()->GetObjectGuid().GetCounter() : 0, MAIL_STATIONERY_GM);
 
-    sMassMailMgr.AddMassMailTask(draft, sender, raceMask);
+    sMassMailMgr.AddMassMailTask(std::move(mailDraft), sender, raceMask);
 
     PSendSysMessage(LANG_MAIL_SENT, name);
     return true;
@@ -6673,19 +6702,18 @@ bool ChatHandler::HandleSendMassMoneyCommand(char* args)
         return false;
 
     // need dynamic object because it trasfered to mass mailer
-    MailDraft* draft = new MailDraft;
+    auto mailDraft = std::make_unique<MailDraft>();
 
     // fill mail
-    if (!HandleSendMoneyHelper(*draft, args))
+    if (!HandleSendMoneyHelper(*mailDraft, args))
     {
-        delete draft;
         return false;
     }
 
     // from console show nonexistent sender
     MailSender sender(MAIL_NORMAL, m_session ? m_session->GetPlayer()->GetObjectGuid().GetCounter() : 0, MAIL_STATIONERY_GM);
 
-    sMassMailMgr.AddMassMailTask(draft, sender, raceMask);
+    sMassMailMgr.AddMassMailTask(std::move(mailDraft), sender, raceMask);
 
     PSendSysMessage(LANG_MAIL_SENT, name);
     return true;

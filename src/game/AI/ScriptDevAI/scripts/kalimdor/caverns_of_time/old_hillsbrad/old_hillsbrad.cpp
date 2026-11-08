@@ -274,9 +274,9 @@ void instance_old_hillsbrad::SetData(uint32 uiType, uint32 uiData)
                 {
                     ResetTimer(OHF_BARREL_RP, 3000);
                     m_uiDrakeStep = 1;
+                    // Change to IN_PROGRESS for gossip condition handling
+                    SetData(TYPE_BARREL_DIVERSION, IN_PROGRESS);
                 }
-                // Change to IN_PROGRESS for gossip condition handling
-                SetData(TYPE_BARREL_DIVERSION, IN_PROGRESS);
             }
             break;
         case TYPE_THRALL_EVENT:

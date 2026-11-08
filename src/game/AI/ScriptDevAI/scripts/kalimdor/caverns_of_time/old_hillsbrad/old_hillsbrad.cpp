@@ -162,7 +162,7 @@ void instance_old_hillsbrad::OnObjectCreate(GameObject* pGo)
 
 void instance_old_hillsbrad::OnCreatureGroupDespawn(CreatureGroup* creatureGroup, Creature* /*pCreature*/)
 {
-    if (creatureGroup->HasStringId("OHF_BARN_GROUP"))
+    if (creatureGroup->HasStringId("OHF_STUN_PHASE_4_UNIT") && GetData(TYPE_ESCORT_INN) != DONE)
         if (Creature* thrall = GetSingleCreatureFromStorage(NPC_THRALL))
             if (thrall->IsAlive())
                 thrall->GetMotionMaster()->UnpauseWaypoints();

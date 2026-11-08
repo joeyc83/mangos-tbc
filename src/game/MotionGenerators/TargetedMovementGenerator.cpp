@@ -273,6 +273,12 @@ void ChaseMovementGenerator::HandleTargetedMovement(Unit& owner, const uint32& t
 
             if (owner.GetDistance(x, y, z, DIST_CALC_NONE) > 0.3f)
             {
+                // If mob is already traveling towards this destination (within 1 yard), don't relaunch spline
+                float dx = dest.x - x;
+                float dy = dest.y - y;
+                if (!owner.movespline->Finalized() && (dx * dx + dy * dy < 1.0f))
+                    return;
+
                 if (DispatchSplineToPosition(owner, x, y, z, EnableWalking(), true, true, true))
                 {
                     this->i_targetReached = false;
@@ -622,9 +628,40 @@ bool ChaseMovementGenerator::_getLocation(Unit& owner, float& x, float& y, float
 
     owner.GetPosition(x, y, z);
 
+    float targetDist = this->GetDynamicTargetDistance(owner, false);
+
+    // If target is moving towards owner during melee chase, calculate an intercept stopping point
+    // rather than overshooting to where the target was standing when aggro/movement began.
+    if (this->i_offset == 0.f && currentAngle && i_target->m_movementInfo.HasMovementFlag(MOVEFLAG_MASK_XY) &&
+        !i_target->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_FALLING | MOVEFLAG_FALLINGFAR)))
+    {
+        float targetMotionAngle = i_target->m_movementInfo.GetOrientationInMotion(i_target->GetOrientation());
+        float angleToOwner = i_target->GetAngle(&owner);
+        float cosApproach = std::cos(targetMotionAngle - angleToOwner);
+
+        if (cosApproach > 0.2f)
+        {
+            UnitMoveType moveType = i_target->IsInWater() ? MOVE_SWIM : (i_target->m_movementInfo.HasMovementFlag(MOVEFLAG_WALK_MODE) ? MOVE_WALK : MOVE_RUN);
+            float v_target = i_target->GetSpeed(moveType) * cosApproach;
+            float v_owner = owner.GetSpeed(owner.IsInWater() ? MOVE_SWIM : (m_walk ? MOVE_WALK : MOVE_RUN));
+            float v_closing = v_owner + v_target;
+
+            if (v_closing > 0.1f)
+            {
+                float currentDist = owner.GetDistance(i_target.getTarget(), DIST_CALC_NONE);
+                float gap = currentDist - targetDist;
+                if (gap > 0.f)
+                {
+                    float playerShare = gap * (v_target / v_closing);
+                    targetDist = std::min(targetDist + playerShare, currentDist);
+                }
+            }
+        }
+    }
+
     // TODO: This code would also benefit greatly if "Get Target Position in 250 ms" function existed
     // TODO: When target is moving away, we should choose a point that is much much closer to account for it
-    i_target->GetNearPoint(&owner, x, y, z, owner.GetObjectBoundingRadius(), this->GetDynamicTargetDistance(owner, false), angle);
+    i_target->GetNearPoint(&owner, x, y, z, owner.GetObjectBoundingRadius(), targetDist, angle);
 
     return true;
 }

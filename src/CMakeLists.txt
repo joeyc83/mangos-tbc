@@ -23,28 +23,29 @@ endif()
 
 # Playerbots module
 if(BUILD_PLAYERBOTS)
-  include(FetchContent)
-
-  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots/.git")
-    set(FETCHCONTENT_UPDATES_DISCONNECTED_PLAYERBOTS TRUE)
-  endif()
-
-  FetchContent_Declare(
-    PlayerBots
-    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots"
-    GIT_REPOSITORY "https://github.com/cmangos/playerbots.git"
-    GIT_TAG "master"
-  )
-
-  FetchContent_GetProperties(PlayerBots)
-  if (NOT playerbots_POPULATED)
-    FetchContent_Populate(PlayerBots)
-    message(STATUS "Playerbots module source dir: ${playerbots_SOURCE_DIR}")
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots/CMakeLists.txt")
+    message(STATUS "Playerbots module found locally: ${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots")
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots")
   else()
-    message(STATUS "Playerbots module already populated: ${playerbots_POPULATED}")
-  endif()
+    include(FetchContent)
 
-  add_subdirectory(${playerbots_SOURCE_DIR})
+    FetchContent_Declare(
+      PlayerBots
+      SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots"
+      GIT_REPOSITORY "https://github.com/cmangos/playerbots.git"
+      GIT_TAG "master"
+    )
+
+    FetchContent_GetProperties(PlayerBots)
+    if (NOT playerbots_POPULATED)
+      FetchContent_Populate(PlayerBots)
+      message(STATUS "Playerbots module source dir: ${playerbots_SOURCE_DIR}")
+    else()
+      message(STATUS "Playerbots module already populated: ${playerbots_POPULATED}")
+    endif()
+
+    add_subdirectory(${playerbots_SOURCE_DIR})
+  endif()
 
 else()
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots)

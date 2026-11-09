@@ -25,6 +25,10 @@ endif()
 if(BUILD_PLAYERBOTS)
   include(FetchContent)
 
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots/.git")
+    set(FETCHCONTENT_UPDATES_DISCONNECTED_PLAYERBOTS TRUE)
+  endif()
+
   FetchContent_Declare(
     PlayerBots
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/modules/PlayerBots"

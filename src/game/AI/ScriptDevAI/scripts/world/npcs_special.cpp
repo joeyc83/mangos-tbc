@@ -435,6 +435,11 @@ struct npc_doctorAI : public ScriptedAI
         m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
     }
 
+    void SummonedCreatureDespawn(Creature* summoned) override
+    {
+        m_lPatientGuids.remove(summoned->GetObjectGuid());
+    }
+
     void BeginEvent(Player* pPlayer);
     void PatientDied(Position* pPoint);
     void PatientSaved(Creature* pSoldier, Player* pPlayer, Position* pPoint);
@@ -539,7 +544,7 @@ struct npc_injured_patientAI : public ScriptedAI
     void UpdateAI(const uint32 uiDiff) override
     {
         // Don't reduce health if already healed
-        if (m_creature->hasUnitState(UNIT_FLAG_UNINTERACTIBLE) || isSaved)
+        if (m_creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE) || isSaved)
             return;
 
         // lower HP on every world tick makes it a useful counter, not officlone though
@@ -670,12 +675,26 @@ void npc_doctorAI::PatientSaved(Creature* /*soldier*/, Player* pPlayer, Position
 
 void npc_doctorAI::UpdateAI(const uint32 uiDiff)
 {
-    if (m_playerGuid && m_creature)
+    if (m_bIsEventInProgress)
     {
-        if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid))
+        if (m_playerGuid && m_creature)
         {
-            if ((pPlayer->GetTeam() == ALLIANCE && (pPlayer->GetQuestStatus(QUEST_TRIAGE_A) == QUEST_STATUS_NONE || pPlayer->GetQuestStatus(QUEST_TRIAGE_A) == QUEST_STATUS_FAILED)) ||
+            if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid))
+            {
+                if (!pPlayer->IsAlive() || !m_creature->IsWithinDistInMap(pPlayer, 60.0f) ||
+                    (pPlayer->GetTeam() == ALLIANCE && (pPlayer->GetQuestStatus(QUEST_TRIAGE_A) == QUEST_STATUS_NONE || pPlayer->GetQuestStatus(QUEST_TRIAGE_A) == QUEST_STATUS_FAILED)) ||
                     (pPlayer->GetTeam() == HORDE && (pPlayer->GetQuestStatus(QUEST_TRIAGE_H) == QUEST_STATUS_NONE || pPlayer->GetQuestStatus(QUEST_TRIAGE_H) == QUEST_STATUS_FAILED)))
+                {
+                    if (pPlayer->GetTeam() == ALLIANCE && pPlayer->GetQuestStatus(QUEST_TRIAGE_A) == QUEST_STATUS_INCOMPLETE)
+                        pPlayer->FailQuest(QUEST_TRIAGE_A);
+                    else if (pPlayer->GetTeam() == HORDE && pPlayer->GetQuestStatus(QUEST_TRIAGE_H) == QUEST_STATUS_INCOMPLETE)
+                        pPlayer->FailQuest(QUEST_TRIAGE_H);
+
+                    Reset();
+                    return;
+                }
+            }
+            else
             {
                 Reset();
                 return;
@@ -730,7 +749,7 @@ void npc_doctorAI::UpdateAI(const uint32 uiDiff)
                             return;
                     }
 
-                    if (Creature* Patient = m_creature->SummonCreature(patientEntry, (*itr)->x, (*itr)->y, (*itr)->z, (*itr)->o, TEMPSPAWN_TIMED_OOC_OR_CORPSE_DESPAWN, 5000))
+                    if (Creature* Patient = m_creature->SummonCreature(patientEntry, (*itr)->x, (*itr)->y, (*itr)->z, (*itr)->o, TEMPSPAWN_DEAD_DESPAWN, 0))
                     {
                         totalSpawned++;
 
